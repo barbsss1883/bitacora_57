@@ -1,0 +1,13 @@
+{
+  "cli": { "version": ">= 3.17.0" },
+  "build": {
+    "preview": {
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_USE_CPP": "1" }
+    },
+    "production": {
+      "android": { "buildType": "app-bundle" },
+      "env": { "EXPO_USE_CPP": "1" }
+    }
+  }
+}
