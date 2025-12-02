@@ -1,88 +1,252 @@
-import { useEffect, useRef, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
-import * as Location from "expo-location";
-import { insertarPuntoRuta, runAsync } from "../db/database";
-import { useRouter } from "expo-router";
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+
+// --- IMPORTACIONES DE TUS COMPONENTES Y SERVICIOS ---
+import MonitorFatiga from '../src/components/MonitorFatiga';
+import { iniciarRastreoBackground, detenerRastreo } from '../src/services/LocationService';
+import { iniciarNuevaJornada, finalizarJornada } from '../db/database';
 
 export default function JornadaEnCurso() {
   const router = useRouter();
-  const [jornadaId, setJornadaId] = useState(null);
-  const [running, setRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const timerRef = useRef(null);
-  const locSubRef = useRef(null);
-  const startTsRef = useRef(0);
+  
+  // Estados para controlar la interfaz
+  const [cargando, setCargando] = useState(true);
+  const [jornadaId, setJornadaId] = useState<number | null>(null);
+  const [fechaInicio, setFechaInicio] = useState<string | null>(null);
+  const [datosViaje, setDatosViaje] = useState({
+    operador: "Juan Pérez", // Aquí podrías jalarlo de un login real
+    unidad: "T-800",
+    origen: "CEDIS México",
+    destino: "Monterrey"
+  });
 
-  const startTimer = () => {
-    startTsRef.current = Date.now();
-    setRunning(true);
-    timerRef.current = setInterval(()=> setElapsed(Date.now() - startTsRef.current), 1000);
-  };
-  const stopTimer = () => { if (timerRef.current) clearInterval(timerRef.current); setRunning(false); };
+  // 1. Al abrir la pantalla, verificamos si ya hay un viaje activo recuperándolo de la memoria
+  useEffect(() => {
+    verificarSesionActiva();
+  }, []);
 
-  const pedirPermiso = async ()=> {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") { Alert.alert("Permiso GPS denegado"); return false; }
-    return true;
-  };
-
-  const startTracking = async (id) => {
-    const ok = await pedirPermiso(); if(!ok) return;
-    locSubRef.current = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 5 }, async (loc)=>{
-      const { latitude, longitude } = loc.coords;
-      const ts = new Date().toISOString();
-      try { await insertarPuntoRuta(id, latitude, longitude, ts); } catch(e){ console.log(e); }
-    });
-  };
-
-  const stopTracking = async () => {
-    if (locSubRef.current) { locSubRef.current.remove(); locSubRef.current = null; }
-  };
-
-  const iniciar = async () => {
-    const fecha = new Date().toISOString();
-    await runAsync(`INSERT INTO jornadas (fecha) VALUES (?)`, [fecha]);
-    const res: any = await runAsync(`SELECT id FROM jornadas ORDER BY id DESC LIMIT 1`);
-    const newId = res.insertId || (res.rows && res.rows.item(0).id);
-    setJornadaId(newId);
-    startTimer();
-    startTracking(newId);
-    Alert.alert("Jornada iniciada");
+  const verificarSesionActiva = async () => {
+    try {
+      const idGuardado = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
+      const fechaGuardada = await AsyncStorage.getItem('CURRENT_JORNADA_START');
+      
+      if (idGuardado && fechaGuardada) {
+        console.log("🔄 Recuperando sesión activa del viaje ID:", idGuardado);
+        setJornadaId(parseInt(idGuardado, 10));
+        setFechaInicio(fechaGuardada);
+      }
+    } catch (e) {
+      console.error("Error recuperando sesión:", e);
+    } finally {
+      setCargando(false);
+    }
   };
 
-  const finalizar = async () => {
-    stopTimer(); stopTracking();
-    const fin = new Date().toISOString();
-    const horas = (elapsed / (1000*60*60));
-    await runAsync(`UPDATE jornadas SET fin_jornada=?, horas_trabajadas=? WHERE id=?`, [fin, horas, jornadaId]);
-    Alert.alert("Jornada finalizada");
-    router.push("/historial");
+  // 2. Función para INICIAR el viaje
+  const handleIniciarViaje = async () => {
+    setCargando(true);
+    try {
+      // A) Crear el registro en la base de datos local (SQLite)
+      const nuevoId = await iniciarNuevaJornada(
+        datosViaje.operador,
+        datosViaje.unidad,
+        datosViaje.origen,
+        datosViaje.destino
+      );
+
+      const fechaActual = new Date().toISOString();
+
+      // B) Guardar en memoria del teléfono (AsyncStorage) para persistencia
+      await AsyncStorage.setItem('CURRENT_JORNADA_ID', nuevoId.toString());
+      await AsyncStorage.setItem('CURRENT_JORNADA_START', fechaActual);
+
+      // C) Activar el GPS en segundo plano
+      await iniciarRastreoBackground();
+
+      // D) Actualizar la pantalla
+      setJornadaId(nuevoId);
+      setFechaInicio(fechaActual);
+      
+      Alert.alert("Buen Viaje 🚛", "La ruta se está registrando correctamente.");
+    } catch (e) {
+      Alert.alert("Error", "No se pudo iniciar la jornada. Verifica tu base de datos.");
+      console.error(e);
+    } finally {
+      setCargando(false);
+    }
   };
 
-  useEffect(()=>{ return ()=>{ if(timerRef.current) clearInterval(timerRef.current); if(locSubRef.current) locSubRef.current.remove(); } },[]);
+  // 3. Función para FINALIZAR el viaje
+  const handleFinalizarViaje = async () => {
+    Alert.alert(
+      "Finalizar Jornada",
+      "¿Estás seguro de que deseas terminar el viaje?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Finalizar", 
+          style: "destructive",
+          onPress: async () => {
+            await ejecutarCierre();
+          }
+        }
+      ]
+    );
+  };
 
-  const fmt = (ms)=> { const s=Math.floor(ms/1000)%60; const m=Math.floor(ms/60000)%60; const h=Math.floor(ms/3600000); return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`; };
+  const ejecutarCierre = async () => {
+    setCargando(true);
+    if (!jornadaId) return;
+
+    try {
+      // A) Detener el GPS para ahorrar batería
+      await detenerRastreo();
+
+      // B) Cerrar el registro en la base de datos
+      await finalizarJornada(jornadaId);
+
+      // C) Limpiar la memoria del teléfono
+      await AsyncStorage.removeItem('CURRENT_JORNADA_ID');
+      await AsyncStorage.removeItem('CURRENT_JORNADA_START');
+
+      // D) Resetear la pantalla
+      setJornadaId(null);
+      setFechaInicio(null);
+
+      Alert.alert("Jornada Finalizada", "Tus datos y ruta han sido guardados exitosamente.");
+    } catch (e) {
+      console.error("Error al finalizar:", e);
+      Alert.alert("Error", "Hubo un problema al cerrar la jornada.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  if (cargando) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color="#3498db" />
+        <Text style={{ marginTop: 10, color: '#bdc3c7' }}>Procesando...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={{flex:1,padding:16,backgroundColor:"#071022"}}>
-      <View style={styles.topBar}><Text style={{color:'#fff',fontWeight:'bold'}}>{fmt(elapsed)}</Text></View>
-      <View style={{marginTop:20}}>
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.header}>
+        <Text style={styles.titulo}>Bitácora de Viaje</Text>
+        <Text style={styles.subtitulo}>{datosViaje.unidad} • {datosViaje.operador}</Text>
+      </View>
+
+      {/* --- MONITOR DE FATIGA (NOM-087) --- */}
+      <View style={styles.card}>
+        <MonitorFatiga 
+          jornadaActiva={!!jornadaId} 
+          fechaInicio={fechaInicio} 
+        />
+      </View>
+
+      {/* --- INFORMACIÓN DE LA RUTA --- */}
+      <View style={styles.infoContainer}>
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Origen:</Text>
+          <Text style={styles.valor}>{datosViaje.origen}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Destino:</Text>
+          <Text style={styles.valor}>{datosViaje.destino}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.label}>Estatus:</Text>
+          <Text style={[styles.valor, { color: jornadaId ? '#2ecc71' : '#e74c3c' }]}>
+            {jornadaId ? 'EN RUTA 🟢' : 'DETENIDO 🔴'}
+          </Text>
+        </View>
+      </View>
+
+      {/* --- BOTONES DE ACCIÓN (Grandes para el operador) --- */}
+      <View style={styles.botonera}>
         {!jornadaId ? (
-          <TouchableOpacity style={styles.btn} onPress={iniciar}><Text style={styles.btnText}>Iniciar Jornada</Text></TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.boton, styles.botonIniciar]} 
+            onPress={handleIniciarViaje}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.textoBoton}>INICIAR JORNADA</Text>
+          </TouchableOpacity>
         ) : (
-          <>
-            {running ? <TouchableOpacity style={styles.btn} onPress={()=>{ stopTimer(); stopTracking(); }}><Text style={styles.btnText}>Pausar</Text></TouchableOpacity>
-            : <TouchableOpacity style={styles.btn} onPress={()=>{ startTimer(); startTracking(jornadaId); }}><Text style={styles.btnText}>Reanudar</Text></TouchableOpacity>}
-            <TouchableOpacity style={[styles.btn,{backgroundColor:'red',marginTop:10}]} onPress={finalizar}><Text style={styles.btnText}>Finalizar Jornada</Text></TouchableOpacity>
-          </>
+          <TouchableOpacity 
+            style={[styles.boton, styles.botonFinalizar]} 
+            onPress={handleFinalizarViaje}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.textoBoton}>FINALIZAR VIAJE</Text>
+          </TouchableOpacity>
         )}
       </View>
-    </View>
+
+      {/* Botón auxiliar para ver mapa (Opcional) */}
+      {jornadaId && (
+        <TouchableOpacity 
+          style={styles.botonSecundario}
+          onPress={() => router.push('/mapaRuta')}
+        >
+          <Text style={styles.textoSecundario}>🗺 Ver Mapa en Tiempo Real</Text>
+        </TouchableOpacity>
+      )}
+
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  topBar:{height:48,backgroundColor:'#0b1320',justifyContent:'center',alignItems:'center',borderRadius:6},
-  btn:{padding:14,backgroundColor:'#1976D2',borderRadius:8,alignItems:'center',marginTop:10},
-  btnText:{color:'#fff',fontWeight:'bold'}
+  container: { flex: 1, backgroundColor: '#1e272e' },
+  scrollContainer: { flexGrow: 1, padding: 20, backgroundColor: '#1e272e' },
+  center: { justifyContent: 'center', alignItems: 'center' },
+  
+  header: { marginBottom: 20, alignItems: 'center' },
+  titulo: { fontSize: 28, fontWeight: 'bold', color: '#ecf0f1', textTransform: 'uppercase' },
+  subtitulo: { fontSize: 16, color: '#bdc3c7', marginTop: 5 },
+
+  card: { marginBottom: 20 },
+
+  infoContainer: { 
+    backgroundColor: '#2d3436', 
+    borderRadius: 10, 
+    padding: 15, 
+    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: '#485460'
+  },
+  infoRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#485460',
+    paddingBottom: 5
+  },
+  label: { color: '#bdc3c7', fontSize: 16 },
+  valor: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
+
+  botonera: { marginBottom: 20 },
+  boton: {
+    paddingVertical: 25,
+    borderRadius: 15,
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.30,
+    shadowRadius: 4.65,
+    elevation: 8,
+  },
+  botonIniciar: { backgroundColor: '#27ae60' },
+  botonFinalizar: { backgroundColor: '#c0392b' },
+  textoBoton: { color: 'white', fontSize: 22, fontWeight: 'bold', letterSpacing: 1 },
+
+  botonSecundario: { padding: 15, alignItems: 'center' },
+  textoSecundario: { color: '#3498db', fontSize: 18, textDecorationLine: 'underline' }
 });
+

@@ -1,13 +1,28 @@
 {
-  "cli": { "version": ">= 3.17.0" },
+  "cli": {
+    "version": ">= 12.5.2"
+  },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk" 
+      }
+    },
     "preview": {
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_USE_CPP": "1" }
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
-      "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_USE_CPP": "1" }
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
+  },
+  "submit": {
+    "production": {}
   }
 }
