@@ -1,0 +1,29 @@
+Expo
+​.expo/
+dist/
+web-build/
+​Node.js
+​node_modules/
+npm-debug.log
+yarn-error.log
+​Mac/Windows/Linux System Files
+​.DS_Store
+Thumbs.db
+​IDEs
+​.idea/
+.vscode/
+*.swp
+*.swo
+​Android/iOS Builds (Artifacts)
+​android/app/build/
+android/app/src/main/assets/
+ios/Pods/
+ios/build/
+​Keys and Secrets (Seguridad)
+​*.jks
+*.keystore
+*.p12
+*.key
+credentials.json
+google-services.json
+GoogleService-Info.plist
