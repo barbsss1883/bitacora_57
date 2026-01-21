@@ -1,194 +1,257 @@
-import * as SQLite from "expo-sqlite";
+import * as SQLite from 'expo-sqlite';
 
-// Inicializamos la conexión a la base de datos (Expo SDK 54+)
-export const db = SQLite.openDatabaseSync("jornadas.db");
+let cachedDb: SQLite.SQLiteDatabase | null = null;
 
-/**
- * Inicializa la estructura de la base de datos.
- * Llama a esta función en tu _layout.tsx o App.tsx al arrancar.
- */
-export async function initDatabase() {
+const getDB = async () => {
+  if (cachedDb) return cachedDb;
   try {
-    // 1. Limpieza (Opcional: comenta esta línea si ya tienes datos que quieres conservar en producción)
-    // await db.execAsync(`DROP TABLE IF EXISTS rutas;`); 
-
-    // 2. Tabla JORNADAS (El viaje principal)
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS jornadas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        operador TEXT,
-        unidad TEXT,
-        origen TEXT,
-        destino TEXT,
-        fecha TEXT,            -- Fecha de creación (ISO String)
-        inicio_jornada TEXT,   -- Fecha/Hora inicio real
-        fin_jornada TEXT,      -- Fecha/Hora fin real
-        horas_trabajadas REAL,
-        comentarios TEXT,
-        firma TEXT
-      );
-    `);
-
-    // 3. Tabla PAUSAS (Para cumplir la NOM-087)
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS pausas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        jornada_id INTEGER,
-        tipo TEXT,       -- Ejemplo: "Alimentos", "Descanso", "Carga combustible"
-        inicio TEXT,
-        fin TEXT,
-        duracion REAL,   -- En minutos u horas
-        FOREIGN KEY(jornada_id) REFERENCES jornadas(id)
-      );
-    `);
-
-    // 4. Tabla INCIDENCIAS
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS incidencias (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        jornada_id INTEGER,
-        tipo TEXT,
-        descripcion TEXT,
-        fecha TEXT,
-        foto TEXT,       -- URI de la imagen local
-        FOREIGN KEY(jornada_id) REFERENCES jornadas(id)
-      );
-    `);
-
-    // 5. Tabla PUNTOS_GPS (Rastreo)
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS puntos_gps (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        jornada_id INTEGER,
-        latitud REAL,
-        longitud REAL,
-        velocidad REAL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(jornada_id) REFERENCES jornadas(id)
-      );
-    `);
-
-    // 6. Índices para optimizar mapas y consultas
-    await db.execAsync(`
-      CREATE INDEX IF NOT EXISTS idx_puntos_gps_jornada ON puntos_gps(jornada_id);
-      CREATE INDEX IF NOT EXISTS idx_jornadas_fecha ON jornadas(fecha);
-    `);
-
-    console.log("✅ Base de datos inicializada correctamente.");
-  } catch (e) {
-    console.error("❌ Error inicializando BD:", e);
+    cachedDb = await SQLite.openDatabaseAsync('bitacora.db');
+    return cachedDb;
+  } catch (error) {
+    console.error('Error opening database:', error);
+    throw error;
   }
-}
+};
 
 // ==========================================
-// 🚛 GESTIÓN DE JORNADAS (Iniciar / Finalizar)
+// 1. INICIALIZAR LA BASE DE DATOS
 // ==========================================
-
-/**
- * Crea una nueva jornada y retorna su ID.
- * Este ID es vital para vincular el GPS.
- */
-export async function iniciarNuevaJornada(operador: string, unidad: string, origen: string, destino: string) {
-  const fechaHoy = new Date().toISOString();
-  
+export const initDatabase = async () => {
   try {
-    const result = await db.runAsync(
-      `INSERT INTO jornadas (operador, unidad, origen, destino, fecha, inicio_jornada) VALUES (?, ?, ?, ?, ?, ?)`,
-      [operador, unidad, origen, destino, fechaHoy, fechaHoy]
+    const db = await getDB();
+    
+    // Create all tables
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT, email TEXT UNIQUE, password TEXT, foto TEXT
+      );
+      CREATE TABLE IF NOT EXISTS documentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER, tipo TEXT, uri TEXT, fecha_vencimiento TEXT
+      );
+      CREATE TABLE IF NOT EXISTS jornadas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, permisionario TEXT, domicilio TEXT, unidad TEXT, placas TEXT,
+        marca TEXT, modelo TEXT, modalidad TEXT, remolque1_eco TEXT, remolque1_placas TEXT,
+        remolque2_eco TEXT, remolque2_placas TEXT, operador TEXT, licencia TEXT, vigencia TEXT,
+        origen TEXT, destino TEXT, tipo_servicio TEXT, fecha_inicio TEXT, fecha_fin TEXT,
+        estatus TEXT DEFAULT 'activo', firma TEXT, ruta_geojson TEXT
+      );
+      CREATE TABLE IF NOT EXISTS inspecciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, jornada_id INTEGER, tipo TEXT, detalles_json TEXT,
+        comentarios TEXT, firma TEXT, fecha TEXT
+      );
+      CREATE TABLE IF NOT EXISTS puntos_gps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, jornada_id INTEGER, latitud REAL, longitud REAL, velocidad REAL, fecha TEXT
+      );
+      CREATE TABLE IF NOT EXISTS pausas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, jornada_id INTEGER, motivo TEXT, inicio TEXT, fin TEXT, duracion REAL
+      );
+      CREATE TABLE IF NOT EXISTS incidencias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, jornada_id INTEGER, tipo TEXT, descripcion TEXT, foto_uri TEXT, fecha TEXT
+      );
+    `);
+    
+    console.log("BD Inicializada correctamente");
+    return true;
+  } catch (error) {
+    console.error("Error iniciando BD:", error);
+    cachedDb = null;
+    throw error;
+  }
+};
+
+// ==========================================
+// FUNCIONES DE CONSULTA
+// ==========================================
+
+export const loginUsuario = async (email: string, pass: string) => {
+  try {
+    const db = await getDB();
+    const result = await db.getFirstAsync(
+      'SELECT * FROM usuarios WHERE email = ? AND password = ?',
+      [email, pass]
     );
-    // Retornamos el ID de la fila recién creada
+    return result || null;
+  } catch (e) {
+    console.error('Error in loginUsuario:', e);
+    return null;
+  }
+};
+
+export const registrarUsuario = async (nombre: string, email: string, pass: string) => {
+  try {
+    const db = await getDB();
+    const result = await db.runAsync(
+      'INSERT INTO usuarios (nombre, email, password) VALUES (?, ?, ?)',
+      [nombre, email, pass]
+    );
     return result.lastInsertRowId;
   } catch (e) {
-    console.error("Error al iniciar jornada:", e);
-    throw e;
+    console.error('Error in registrarUsuario:', e);
+    return null;
   }
-}
+};
 
-/**
- * Cierra la jornada actual estableciendo la fecha de fin.
- */
-export async function finalizarJornada(id: number) {
-  const fin = new Date().toISOString();
+export const loginConGoogle = async (googleUser: any) => {
   try {
-    await db.runAsync(
-      `UPDATE jornadas SET fin_jornada = ? WHERE id = ?`,
-      [fin, id]
+    const db = await getDB();
+    const { email, name, photo } = googleUser;
+    const existing = await db.getFirstAsync('SELECT * FROM usuarios WHERE email = ?', [email]);
+    if (existing) return existing;
+    
+    const result = await db.runAsync(
+      'INSERT INTO usuarios (nombre, email, foto, password) VALUES (?, ?, ?, ?)',
+      [name, email, photo, 'google_oauth']
     );
-    console.log(`🏁 Jornada ${id} finalizada a las ${fin}`);
+    return { id: result.lastInsertRowId, nombre: name, email, foto: photo };
   } catch (e) {
-    console.error("Error al finalizar jornada:", e);
+    console.error('Error in loginConGoogle:', e);
+    return null;
   }
-}
+};
 
-/**
- * Obtiene el historial de todas las jornadas para la pantalla de "Historial".
- */
-export async function obtenerHistorialJornadas() {
+export const obtenerDocumentosUsuario = async (usuarioId: number) => {
   try {
-    return await db.getAllAsync(`SELECT * FROM jornadas ORDER BY id DESC`);
+    const db = await getDB();
+    const results = await db.getAllAsync('SELECT * FROM documentos WHERE usuario_id = ?', [usuarioId]);
+    return results || [];
   } catch (e) {
-    console.error("Error obteniendo historial:", e);
+    console.error('Error in obtenerDocumentosUsuario:', e);
     return [];
   }
-}
+};
 
-// ==========================================
-// 📍 GESTIÓN DE GPS (Rastreo)
-// ==========================================
-
-/**
- * Inserta un punto GPS. Usado por el servicio en segundo plano.
- */
-export async function insertarPuntoGPS(jornadaId: number, latitud: number, longitud: number, velocidad: number = 0) {
+export const guardarDocumento = async (usuarioId: number, tipo: string, uri: string, vencimiento: string) => {
   try {
+    const db = await getDB();
     await db.runAsync(
-      `INSERT INTO puntos_gps (jornada_id, latitud, longitud, velocidad) VALUES (?, ?, ?, ?)`,
-      [jornadaId, latitud, longitud, velocidad]
+      'INSERT INTO documentos (usuario_id, tipo, uri, fecha_vencimiento) VALUES (?, ?, ?, ?)',
+      [usuarioId, tipo, uri, vencimiento]
     );
+    return true;
   } catch (e) {
-    // No usamos console.error aquí para no saturar los logs si falla un punto
-    console.log("Error guardando punto GPS:", e);
+    console.error('Error in guardarDocumento:', e);
+    return false;
   }
-}
+};
 
-/**
- * Obtiene todos los puntos de una jornada específica para pintarlos en el mapa.
- */
-export async function obtenerPuntosGPS(jornadaId: number) {
+export const iniciarNuevaJornada = async (datos: any) => {
   try {
-    return await db.getAllAsync(
-      `SELECT latitud, longitud FROM puntos_gps WHERE jornada_id = ? ORDER BY id ASC`,
-      [jornadaId]
+    const db = await getDB();
+    const fecha = new Date().toISOString();
+    const result = await db.runAsync(
+      `INSERT INTO jornadas (permisionario, domicilio, unidad, placas, marca, modelo, modalidad, remolque1_eco, remolque1_placas, remolque2_eco, remolque2_placas, operador, licencia, vigencia, origen, destino, tipo_servicio, fecha_inicio, estatus) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'activo')`,
+      [datos.permisionario, datos.domicilio, datos.unidad, datos.placas, datos.marca, datos.modelo, datos.modalidad, datos.remolque1_eco, datos.remolque1_placas, datos.remolque2_eco, datos.remolque2_placas, datos.operador, datos.licencia, datos.vigencia, datos.origen, datos.destino, datos.tipo_servicio, fecha]
     );
+    return result.lastInsertRowId;
   } catch (e) {
-    console.error("Error recuperando ruta:", e);
+    console.error('Error in iniciarNuevaJornada:', e);
+    return null;
+  }
+};
+
+export const finalizarJornada = async (id: number, firma: string, rutaGeoJson: string | null) => {
+  try {
+    const db = await getDB();
+    const fin = new Date().toISOString();
+    await db.runAsync(
+      `UPDATE jornadas SET fecha_fin = ?, firma = ?, ruta_geojson = ?, estatus = 'finalizado' WHERE id = ?`,
+      [fin, firma, rutaGeoJson, id]
+    );
+    return true;
+  } catch (e) {
+    console.error('Error in finalizarJornada:', e);
+    return false;
+  }
+};
+
+export const guardarInspeccion = async (jornadaId: number, tipo: string, detalles: any, comentarios: string, firma: string) => {
+  try {
+    const db = await getDB();
+    const fecha = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO inspecciones (jornada_id, tipo, detalles_json, comentarios, firma, fecha) VALUES (?,?,?,?,?,?)`,
+      [jornadaId, tipo, JSON.stringify(detalles), comentarios, firma, fecha]
+    );
+    return true;
+  } catch (e) {
+    console.error('Error in guardarInspeccion:', e);
+    return false;
+  }
+};
+
+export const insertarPuntoGPS = async (jornadaId: number, lat: number, long: number, vel: number | null) => {
+  if (!jornadaId) return false;
+  try {
+    const db = await getDB();
+    const fecha = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO puntos_gps (jornada_id, latitud, longitud, velocidad, fecha) VALUES (?,?,?,?,?)`,
+      [jornadaId, lat, long, vel || 0, fecha]
+    );
+    return true;
+  } catch (e) {
+    console.error('Error in insertarPuntoGPS:', e);
+    return false;
+  }
+};
+
+export const insertarPausa = async (jornadaId: number, motivo: string, inicio: string, fin: string, duracion: number) => {
+  try {
+    const db = await getDB();
+    await db.runAsync(
+      `INSERT INTO pausas (jornada_id, motivo, inicio, fin, duracion) VALUES (?,?,?,?,?)`,
+      [jornadaId, motivo, inicio, fin, duracion]
+    );
+    return true;
+  } catch (e) {
+    console.error('Error in insertarPausa:', e);
+    return false;
+  }
+};
+
+export const insertarIncidencia = async (jornadaId: number, tipo: string, descripcion: string, fotoUri: string | null) => {
+  try {
+    const db = await getDB();
+    const fecha = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO incidencias (jornada_id, tipo, descripcion, foto_uri, fecha) VALUES (?,?,?,?,?)`,
+      [jornadaId, tipo, descripcion, fotoUri, fecha]
+    );
+    return true;
+  } catch (e) {
+    console.error('Error in insertarIncidencia:', e);
+    return false;
+  }
+};
+
+export const obtenerHistorialJornadas = async () => {
+  try {
+    const db = await getDB();
+    const results = await db.getAllAsync('SELECT * FROM jornadas ORDER BY id DESC');
+    return results || [];
+  } catch (e) {
+    console.error('Error in obtenerHistorialJornadas:', e);
     return [];
   }
-}
+};
 
-// ==========================================
-// ☕ GESTIÓN DE PAUSAS E INCIDENCIAS
-// ==========================================
-
-export async function insertarPausa(jornadaId: number, tipo: string, inicio: string, fin: string, duracion: number) {
+export const obtenerDetalleJornada = async (id: number) => {
   try {
-    await db.runAsync(
-      `INSERT INTO pausas (jornada_id, tipo, inicio, fin, duracion) VALUES (?, ?, ?, ?, ?)`,
-      [jornadaId, tipo, inicio, fin, duracion]
-    );
-  } catch (e) {
-    console.error("Error insertando pausa:", e);
-  }
-}
+    const db = await getDB();
+    const jornada = await db.getFirstAsync('SELECT * FROM jornadas WHERE id = ?', [id]);
+    const pausas = await db.getAllAsync('SELECT * FROM pausas WHERE jornada_id = ?', [id]);
+    const incidencias = await db.getAllAsync('SELECT * FROM incidencias WHERE jornada_id = ?', [id]);
+    const inspecciones = await db.getAllAsync('SELECT * FROM inspecciones WHERE jornada_id = ?', [id]);
 
-export async function insertarIncidencia(jornadaId: number, tipo: string, descripcion: string, foto: string | null = null) {
-  const fecha = new Date().toISOString();
-  try {
-    await db.runAsync(
-      `INSERT INTO incidencias (jornada_id, tipo, descripcion, fecha, foto) VALUES (?, ?, ?, ?, ?)`,
-      [jornadaId, tipo, descripcion, fecha, foto]
-    );
+    return { 
+      jornada: jornada || null,
+      pausas: pausas || [], 
+      incidencias: incidencias || [], 
+      inspecciones: inspecciones || [] 
+    };
   } catch (e) {
-    console.error("Error insertando incidencia:", e);
+    console.error('Error in obtenerDetalleJornada:', e);
+    return { jornada: null, pausas: [], incidencias: [], inspecciones: [] };
   }
-}
+};

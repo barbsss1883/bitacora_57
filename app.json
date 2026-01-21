@@ -2,64 +2,62 @@
   "expo": {
     "name": "Bitacora57",
     "slug": "Bitacora57",
+    "scheme": "bitacora57",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "dark",
+    "owner": "luis0418",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#111111"
+      "backgroundColor": "#0f172a"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#111111"
-      },
       "package": "com.luisg0418.Bitacora57",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION"
-      ]
-    },
-    "ios": {
-      "bundleIdentifier": "com.luisg0418.Bitacora57",
-      "infoPlist": {
-        "UIBackgroundModes": [
-          "location",
-          "fetch"
-        ],
-        "NSLocationWhenInUseUsageDescription": "Esta aplicación necesita acceso a tu ubicación para registrar la ruta de la jornada.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Esta aplicación necesita rastrear tu ubicación en segundo plano para registrar la ruta completa del viaje incluso con la pantalla apagada.",
-        "NSLocationAlwaysUsageDescription": "Esta aplicación necesita rastrear tu ubicación en segundo plano para registrar la ruta completa del viaje."
+        "FOREGROUND_SERVICE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyD5yqF31xg4hiBZCqGnLZWH1KAgTZj-uA0"
+        }
       }
     },
     "plugins": [
       "expo-router",
       "expo-sqlite",
+      "@react-native-google-signin/google-signin",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Permitir que $(PRODUCT_NAME) use tu ubicación para registrar el viaje en segundo plano.",
+          "locationAlwaysAndWhenInUsePermission": "Permitir que Bitácora57 use tu ubicación en segundo plano para alertarte de zonas de riesgo durante tu ruta.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsImpl": "mapbox",
+          "RNMapboxMapsDownloadToken": "sk.eyJ1IjoibHVpc2cwNDE4IiwiYSI6ImNtaXhqOGpqNjA1NDIzZnByOWc0dG16aXQifQ.tNo8k-4i6yXCpdGwR2dl3Q"
         }
       ]
     ],
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "5f6c4bfe-805d-497b-9ab6-6375aaf3a3a3"
+        "projectId": "d630e51d-c603-4e63-b9a2-bb88ab340f13"
       }
-    },
-    "owner": "luisg0418"
+    }
   }
 }

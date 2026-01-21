@@ -1,7 +1,7 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { insertarPuntoGPS } from '../db/database'; // <--- Importamos tu función
+import { insertarPuntoGPS } from '../../db/database';
 
 const LOCATION_TASK_NAME = 'BACKGROUND_GPS_TRACKING';
 
@@ -48,7 +48,6 @@ export const iniciarRastreoBackground = async () => {
     return;
   }
   
-  // Aseguramos que no esté corriendo ya para evitar duplicados
   const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
   if (hasStarted) return;
 

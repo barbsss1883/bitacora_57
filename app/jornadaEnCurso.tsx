@@ -1,252 +1,431 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { 
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, 
+  TextInput, StatusBar, Alert, ActivityIndicator, Platform
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-// --- IMPORTACIONES DE TUS COMPONENTES Y SERVICIOS ---
-import MonitorFatiga from '../src/components/MonitorFatiga';
+// --- IMPORTAMOS TU MAPA BLINDADO ---
+import MapaRuta from './mapaRuta'; 
+
+// SERVICIOS Y BD
 import { iniciarRastreoBackground, detenerRastreo } from '../src/services/LocationService';
-import { iniciarNuevaJornada, finalizarJornada } from '../db/database';
+import { iniciarNuevaJornada, finalizarJornada, insertarPausa, insertarIncidencia } from '../db/database';
+import FirmaDigital from '../src/components/FirmaDigital';
+
+const COLORS = {
+  bg: '#0f172a', card: '#1e293b', primary: '#f59e0b', danger: '#7f1d1d',  
+  text: '#f8fafc', subtext: '#94a3b8', success: '#10b981', 
+  border: '#334155', warning: '#f97316', white: '#ffffff',
+  modalOverlay: 'rgba(15, 23, 42, 0.95)'
+};
+
+const TIPOS_SERVICIO = ["Carga General", "Carga Especializada", "Materiales Peligrosos", "Transporte Privado", "Turismo"];
 
 export default function JornadaEnCurso() {
   const router = useRouter();
   
-  // Estados para controlar la interfaz
   const [cargando, setCargando] = useState(true);
   const [jornadaId, setJornadaId] = useState<number | null>(null);
   const [fechaInicio, setFechaInicio] = useState<string | null>(null);
-  const [datosViaje, setDatosViaje] = useState({
-    operador: "Juan Pérez", // Aquí podrías jalarlo de un login real
-    unidad: "T-800",
-    origen: "CEDIS México",
-    destino: "Monterrey"
+  const [visuales, setVisuales] = useState({ unidad: '---', operador: '---' });
+  
+  // Estados de Pausa
+  const [enPausa, setEnPausa] = useState(false);
+  const [inicioPausa, setInicioPausa] = useState<string | null>(null);
+  const [tipoPausaActual, setTipoPausaActual] = useState<string | null>(null);
+
+  // Modales
+  const [modalRegistro, setModalRegistro] = useState(false);
+  const [modalPausa, setModalPausa] = useState(false);
+  const [modalTipoServicio, setModalTipoServicio] = useState(false);
+  const [modalFirma, setModalFirma] = useState(false);
+  const [modalIncidencia, setModalIncidencia] = useState(false);
+  
+  // Formulario
+  const [formulario, setFormulario] = useState({
+    permisionario: '', domicilio: '', tipo_servicio: 'Carga General',
+    unidad: '', placas: '', marca: '', modelo: '', modalidad: 'Sencillo',
+    remolque1_eco: '', remolque1_placas: '', remolque2_eco: '', remolque2_placas: '', 
+    operador: '', licencia: '', vigencia: '', origen: '', destino: ''
   });
 
-  // 1. Al abrir la pantalla, verificamos si ya hay un viaje activo recuperándolo de la memoria
-  useEffect(() => {
-    verificarSesionActiva();
-  }, []);
+  const [descIncidencia, setDescIncidencia] = useState('');
 
-  const verificarSesionActiva = async () => {
-    try {
-      const idGuardado = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
-      const fechaGuardada = await AsyncStorage.getItem('CURRENT_JORNADA_START');
-      
-      if (idGuardado && fechaGuardada) {
-        console.log("🔄 Recuperando sesión activa del viaje ID:", idGuardado);
-        setJornadaId(parseInt(idGuardado, 10));
-        setFechaInicio(fechaGuardada);
+  // Cronómetro
+  const [tiempoManejo, setTiempoManejo] = useState('00:00:00');
+  const [tiempoTotal, setTiempoTotal] = useState('00:00:00');
+
+  useEffect(() => { 
+    cargarEstado(); 
+    const interval = setInterval(() => {
+      if (jornadaId && fechaInicio && !enPausa) {
+        const inicio = new Date(fechaInicio);
+        const ahora = new Date();
+        const diff = ahora.getTime() - inicio.getTime();
+        setTiempoManejo(formatearTiempo(diff));
+        setTiempoTotal(formatearTiempo(diff)); 
       }
-    } catch (e) {
-      console.error("Error recuperando sesión:", e);
-    } finally {
-      setCargando(false);
-    }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [jornadaId, fechaInicio, enPausa]);
+
+  const formatearTiempo = (ms: number) => {
+    const segundos = Math.floor((ms / 1000) % 60);
+    const minutos = Math.floor((ms / (1000 * 60)) % 60);
+    const horas = Math.floor((ms / (1000 * 60 * 60)) % 24);
+    return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
   };
 
-  // 2. Función para INICIAR el viaje
-  const handleIniciarViaje = async () => {
-    setCargando(true);
+  const cargarEstado = async () => {
     try {
-      // A) Crear el registro en la base de datos local (SQLite)
-      const nuevoId = await iniciarNuevaJornada(
-        datosViaje.operador,
-        datosViaje.unidad,
-        datosViaje.origen,
-        datosViaje.destino
-      );
+      const id = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
+      const inicio = await AsyncStorage.getItem('CURRENT_JORNADA_START');
+      const vis = await AsyncStorage.getItem('CURRENT_JORNADA_VISUAL');
+      const pStart = await AsyncStorage.getItem('CURRENT_PAUSA_START');
+      const pType = await AsyncStorage.getItem('CURRENT_PAUSA_TYPE');
 
-      const fechaActual = new Date().toISOString();
-
-      // B) Guardar en memoria del teléfono (AsyncStorage) para persistencia
-      await AsyncStorage.setItem('CURRENT_JORNADA_ID', nuevoId.toString());
-      await AsyncStorage.setItem('CURRENT_JORNADA_START', fechaActual);
-
-      // C) Activar el GPS en segundo plano
-      await iniciarRastreoBackground();
-
-      // D) Actualizar la pantalla
-      setJornadaId(nuevoId);
-      setFechaInicio(fechaActual);
+      if (id && inicio) { setJornadaId(Number(id)); setFechaInicio(inicio); }
+      if (vis) setVisuales(JSON.parse(vis));
+      if (pStart) { setEnPausa(true); setInicioPausa(pStart); setTipoPausaActual(pType || 'Pausa'); }
       
-      Alert.alert("Buen Viaje 🚛", "La ruta se está registrando correctamente.");
-    } catch (e) {
-      Alert.alert("Error", "No se pudo iniciar la jornada. Verifica tu base de datos.");
-      console.error(e);
-    } finally {
-      setCargando(false);
-    }
-  };
-
-  // 3. Función para FINALIZAR el viaje
-  const handleFinalizarViaje = async () => {
-    Alert.alert(
-      "Finalizar Jornada",
-      "¿Estás seguro de que deseas terminar el viaje?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Finalizar", 
-          style: "destructive",
-          onPress: async () => {
-            await ejecutarCierre();
-          }
+      if (!id) {
+        const presets = await AsyncStorage.getItem('FORM_PRESETS');
+        if (presets) {
+          const d = JSON.parse(presets);
+          setFormulario(prev => ({ ...prev, ...d, origen: '', destino: '' }));
         }
-      ]
-    );
+      }
+    } catch(e) { console.error(e); } finally { setCargando(false); }
   };
 
-  const ejecutarCierre = async () => {
-    setCargando(true);
-    if (!jornadaId) return;
+  const iniciarViaje = async () => {
+    if (!formulario.permisionario || !formulario.unidad || !formulario.operador || !formulario.origen || !formulario.destino) {
+         Alert.alert("Datos Incompletos", "Verifica unidad, operador y ruta."); return;
+    }
+    
+    // --- LIMPIEZA PREVENTIVA: BORRAR RUTA ANTERIOR ---
+    await AsyncStorage.removeItem('RUTA_OFFLINE_CACHE');
+    
+    setModalRegistro(false);
+    const datosParaGuardar = { ...formulario, marca: `${formulario.marca} ${formulario.modelo}` };
+    const presets = { ...formulario, origen: '', destino: '' };
+    await AsyncStorage.setItem('FORM_PRESETS', JSON.stringify(presets));
 
     try {
-      // A) Detener el GPS para ahorrar batería
-      await detenerRastreo();
+        const nuevoId = await iniciarNuevaJornada(datosParaGuardar);
+        const ahora = new Date().toISOString();
+        
+        await AsyncStorage.setItem('CURRENT_JORNADA_ID', String(nuevoId));
+        await AsyncStorage.setItem('CURRENT_JORNADA_START', ahora);
+        const datosVis = { unidad: formulario.unidad, operador: formulario.operador };
+        await AsyncStorage.setItem('CURRENT_JORNADA_VISUAL', JSON.stringify(datosVis));
+        
+        setJornadaId(nuevoId); setFechaInicio(ahora); setVisuales(datosVis);
+        await iniciarRastreoBackground();
+        Alert.alert("¡Buen Viaje!", "Bitácora iniciada correctamente.");
+    } catch (error) { Alert.alert("Error BD", "No se pudo iniciar."); }
+  };
 
-      // B) Cerrar el registro en la base de datos
-      await finalizarJornada(jornadaId);
+  const pedirFirmaCierre = () => { if (enPausa) { Alert.alert("Pausa Activa", "Termina la pausa antes de finalizar."); return; } setModalFirma(true); };
 
-      // C) Limpiar la memoria del teléfono
-      await AsyncStorage.removeItem('CURRENT_JORNADA_ID');
-      await AsyncStorage.removeItem('CURRENT_JORNADA_START');
+  const confirmarCierreConFirma = async (firmaBase64: string) => {
+    setModalFirma(false); 
+    setCargando(true);
+    try {
+        await detenerRastreo();
 
-      // D) Resetear la pantalla
-      setJornadaId(null);
-      setFechaInicio(null);
+        // --- RECUPERAR RUTA DEL DISCO ---
+        const rutaJson = await AsyncStorage.getItem('RUTA_OFFLINE_CACHE');
+        
+        if(jornadaId) {
+            // Guardamos ID, Firma y RUTA (JSON) en la base de datos
+            await finalizarJornada(jornadaId, firmaBase64, rutaJson);
+        }
 
-      Alert.alert("Jornada Finalizada", "Tus datos y ruta han sido guardados exitosamente.");
-    } catch (e) {
-      console.error("Error al finalizar:", e);
-      Alert.alert("Error", "Hubo un problema al cerrar la jornada.");
-    } finally {
-      setCargando(false);
+        // --- BORRAR RUTA DEL DISCO (Para que el prox viaje inicie limpio) ---
+        await AsyncStorage.removeItem('RUTA_OFFLINE_CACHE');
+        
+        // Borrar el resto de datos temporales
+        await AsyncStorage.multiRemove([
+          'CURRENT_JORNADA_ID', 'CURRENT_JORNADA_START', 
+          'CURRENT_JORNADA_VISUAL', 'CURRENT_PAUSA_START', 'CURRENT_PAUSA_TYPE'
+        ]);
+        
+        router.replace('/home');
+    } catch (e) { 
+        console.error(e);
+        Alert.alert("Error", "Error al finalizar."); 
+    } finally { 
+        setCargando(false); 
     }
   };
 
-  if (cargando) {
-    return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#3498db" />
-        <Text style={{ marginTop: 10, color: '#bdc3c7' }}>Procesando...</Text>
-      </View>
-    );
-  }
+  const activarPausa = async (motivo: string) => {
+    setModalPausa(false); const ahora = new Date().toISOString();
+    setEnPausa(true); setInicioPausa(ahora); setTipoPausaActual(motivo);
+    await AsyncStorage.setItem('CURRENT_PAUSA_START', ahora); await AsyncStorage.setItem('CURRENT_PAUSA_TYPE', motivo);
+  };
+
+  const terminarPausa = async () => {
+    if (!inicioPausa || !jornadaId) return;
+    const fin = new Date(); const inicio = new Date(inicioPausa);
+    const duracion = (fin.getTime() - inicio.getTime()) / 60000;
+    await insertarPausa(jornadaId, tipoPausaActual || 'Varios', inicio.toISOString(), fin.toISOString(), duracion);
+    await AsyncStorage.removeItem('CURRENT_PAUSA_START'); await AsyncStorage.removeItem('CURRENT_PAUSA_TYPE');
+    setEnPausa(false); setInicioPausa(null); setTipoPausaActual(null);
+  };
+
+  const reportarIncidencia = async () => {
+    if (!jornadaId) return; setModalIncidencia(false);
+    try { await insertarIncidencia(jornadaId, "Reporte Manual", descIncidencia, null); setDescIncidencia(''); Alert.alert("Reportado", "Incidencia registrada."); } catch (e) { Alert.alert("Error", "No se guardó."); }
+  };
+
+  if (cargando) return <View style={[styles.container, {justifyContent:'center'}]}><ActivityIndicator size="large" color={COLORS.primary}/></View>;
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <View style={styles.header}>
-        <Text style={styles.titulo}>Bitácora de Viaje</Text>
-        <Text style={styles.subtitulo}>{datosViaje.unidad} • {datosViaje.operador}</Text>
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+      
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+        
+        {/* DASHBOARD CARD */}
+        <View style={styles.timerCardNew}>
+          <View style={styles.timerHeader}>
+            <View style={{flexDirection:'row', alignItems:'center'}}>
+                <MaterialCommunityIcons name="timer-outline" size={18} color={COLORS.subtext} style={{marginRight: 5}} />
+                <Text style={styles.cardLabelNew}>TIEMPO DE MANEJO</Text>
+            </View>
+            <View style={{flexDirection:'column', alignItems:'flex-end', gap: 6}}>
+                <View style={[styles.statusBadgeNew, {backgroundColor: enPausa ? COLORS.warning : COLORS.success}]}>
+                    <Text style={styles.statusTextNew}>{enPausa ? "EN PAUSA" : "EN RUTA"}</Text>
+                </View>
+                {jornadaId && !enPausa && (
+                  <TouchableOpacity style={styles.btnReportarNew} onPress={() => setModalIncidencia(true)}>
+                    <MaterialCommunityIcons name="alert" size={16} color={COLORS.warning} />
+                    <Text style={styles.txtReportarNew}>Reportar</Text>
+                  </TouchableOpacity>
+                )}
+            </View>
+          </View>
 
-      {/* --- MONITOR DE FATIGA (NOM-087) --- */}
-      <View style={styles.card}>
-        <MonitorFatiga 
-          jornadaActiva={!!jornadaId} 
-          fechaInicio={fechaInicio} 
-        />
-      </View>
+          <View style={styles.mainTimerContainer}>
+            {enPausa ? (
+                <View style={{alignItems:'center'}}>
+                    <Text style={[styles.mainTimerText, {color: COLORS.warning, fontSize: 32}]}>PAUSA</Text>
+                    <Text style={{color: COLORS.subtext, fontSize: 16}}>{tipoPausaActual}</Text>
+                </View>
+            ) : (
+                <View style={{flexDirection:'row', alignItems:'baseline'}}>
+                    <Text style={styles.mainTimerText}>{tiempoManejo}</Text>
+                    <Text style={styles.subTimerText}> / 05:00:00</Text>
+                </View>
+            )}
+          </View>
+          <View style={styles.progressBarBgNew}><View style={[styles.progressBarFillNew, { width: '30%', backgroundColor: enPausa ? COLORS.warning : COLORS.success }]} /></View>
+          <View style={styles.progressLabels}><Text style={styles.progressLabelText}>INICIO</Text><Text style={styles.progressLabelText}>ALERTA 4.5H</Text><Text style={styles.progressLabelText}>LÍMITE 5H</Text></View>
+          <View style={styles.dividerNew} />
+          <View style={styles.footerTimer}>
+             <Text style={styles.footerLabel}>Jornada Total Acumulada:</Text>
+             <View style={{flexDirection:'row', alignItems:'baseline'}}><Text style={styles.footerTimerText}>{tiempoTotal}</Text><Text style={styles.footerSubTimerText}> / 14:00:00</Text></View>
+          </View>
+        </View>
 
-      {/* --- INFORMACIÓN DE LA RUTA --- */}
-      <View style={styles.infoContainer}>
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Origen:</Text>
-          <Text style={styles.valor}>{datosViaje.origen}</Text>
+        {/* MAP SECTION */}
+        <View style={styles.mapContainer}>
+             {/* KEY: Obliga al mapa a reiniciarse si cambia el ID del viaje */}
+             <MapaRuta key={jornadaId ? `viaje-${jornadaId}` : 'sin-viaje'} />
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Destino:</Text>
-          <Text style={styles.valor}>{datosViaje.destino}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Estatus:</Text>
-          <Text style={[styles.valor, { color: jornadaId ? '#2ecc71' : '#e74c3c' }]}>
-            {jornadaId ? 'EN RUTA 🟢' : 'DETENIDO 🔴'}
-          </Text>
-        </View>
-      </View>
 
-      {/* --- BOTONES DE ACCIÓN (Grandes para el operador) --- */}
-      <View style={styles.botonera}>
+      </ScrollView>
+
+      {/* BOTTOM BAR */}
+      <View style={styles.bottomBarBig}>
         {!jornadaId ? (
-          <TouchableOpacity 
-            style={[styles.boton, styles.botonIniciar]} 
-            onPress={handleIniciarViaje}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.textoBoton}>INICIAR JORNADA</Text>
+          <TouchableOpacity style={[styles.btnBigBase, {backgroundColor: COLORS.primary}]} onPress={() => setModalRegistro(true)}>
+             <Text style={styles.btnBigTitle}>INICIAR JORNADA</Text><Text style={styles.btnBigSub}>Configurar nueva ruta</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity 
-            style={[styles.boton, styles.botonFinalizar]} 
-            onPress={handleFinalizarViaje}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.textoBoton}>FINALIZAR VIAJE</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity style={[styles.btnBigBase, {backgroundColor: enPausa ? COLORS.success : COLORS.primary, marginRight: 10}]} onPress={() => enPausa ? terminarPausa() : setModalPausa(true)}>
+                <View style={{flexDirection:'row', alignItems:'center'}}><MaterialCommunityIcons name={enPausa ? "play" : "pause"} size={24} color="white" style={{marginRight:5}} /><Text style={styles.btnBigTitle}>{enPausa ? "REANUDAR" : "PAUSA"}</Text></View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.btnBigBase, {backgroundColor: COLORS.danger, flex: 0.6}]} onPress={pedirFirmaCierre}>
+                <View style={{flexDirection:'row', alignItems:'center'}}><Text style={styles.btnBigTitle}>FINALIZAR</Text></View>
+            </TouchableOpacity>
+          </>
         )}
       </View>
 
-      {/* Botón auxiliar para ver mapa (Opcional) */}
-      {jornadaId && (
-        <TouchableOpacity 
-          style={styles.botonSecundario}
-          onPress={() => router.push('/mapaRuta')}
-        >
-          <Text style={styles.textoSecundario}>🗺 Ver Mapa en Tiempo Real</Text>
-        </TouchableOpacity>
-      )}
+      {/* MODAL REGISTRO DE VIAJE */}
+      <Modal visible={modalRegistro} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+                <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom:15}}>
+                    <Text style={styles.sectionHeader}>NUEVO VIAJE</Text>
+                    <TouchableOpacity onPress={() => setModalRegistro(false)}>
+                        <MaterialCommunityIcons name="close" size={24} color="#fff"/>
+                    </TouchableOpacity>
+                </View>
+                
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    <InputDark label="1. Permisionario" val={formulario.permisionario} set={(t:string)=>setFormulario({...formulario, permisionario: t})} placeholder="Nombre Empresa" />
+                    <InputDark label="Domicilio Fiscal" val={formulario.domicilio} set={(t:string)=>setFormulario({...formulario, domicilio: t})} />
+                    
+                    <Text style={styles.labelSection}>2. Unidad</Text>
+                    <View style={styles.row}>
+                        <InputDark label="Unidad" val={formulario.unidad} set={(t:string)=>setFormulario({...formulario, unidad: t})} flex />
+                        <InputDark label="Placas" val={formulario.placas} set={(t:string)=>setFormulario({...formulario, placas: t})} flex />
+                    </View>
+                    <View style={styles.row}>
+                        <InputDark label="Marca" val={formulario.marca} set={(t:string)=>setFormulario({...formulario, marca: t})} flex />
+                        <InputDark label="Modelo" val={formulario.modelo} set={(t:string)=>setFormulario({...formulario, modelo: t})} flex />
+                    </View>
 
-    </ScrollView>
+                    <View style={{flexDirection:'row', marginBottom:10, marginTop:5}}>
+                         <TouchableOpacity onPress={()=>setFormulario({...formulario, modalidad:'Sencillo'})} style={[styles.switch, formulario.modalidad==='Sencillo' && styles.switchActive]}><Text style={{color:'white'}}>Sencillo</Text></TouchableOpacity>
+                         <TouchableOpacity onPress={()=>setFormulario({...formulario, modalidad:'Full'})} style={[styles.switch, formulario.modalidad==='Full' && styles.switchActive]}><Text style={{color:'white'}}>Full</Text></TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.labelSection}>3. Remolques</Text>
+                    <View style={styles.row}>
+                        <InputDark label="Eco R1" val={formulario.remolque1_eco} set={(t:string)=>setFormulario({...formulario, remolque1_eco: t})} flex />
+                        <InputDark label="Placas R1" val={formulario.remolque1_placas} set={(t:string)=>setFormulario({...formulario, remolque1_placas: t})} flex />
+                    </View>
+                    {formulario.modalidad === 'Full' && (
+                        <View style={styles.row}>
+                            <InputDark label="Eco R2" val={formulario.remolque2_eco} set={(t:string)=>setFormulario({...formulario, remolque2_eco: t})} flex />
+                            <InputDark label="Placas R2" val={formulario.remolque2_placas} set={(t:string)=>setFormulario({...formulario, remolque2_placas: t})} flex />
+                        </View>
+                    )}
+
+                    <Text style={styles.labelSection}>4. Conductor</Text>
+                    <InputDark label="Nombre" val={formulario.operador} set={(t:string)=>setFormulario({...formulario, operador: t})} />
+                    <View style={styles.row}>
+                        <InputDark label="Licencia" val={formulario.licencia} set={(t:string)=>setFormulario({...formulario, licencia: t})} flex />
+                        <InputDark label="Vigencia" val={formulario.vigencia} set={(t:string)=>setFormulario({...formulario, vigencia: t})} flex />
+                    </View>
+
+                    <Text style={styles.labelSection}>5. Ruta</Text>
+                    <InputDark label="Origen" val={formulario.origen} set={(t:string)=>setFormulario({...formulario, origen: t})} />
+                    <InputDark label="Destino" val={formulario.destino} set={(t:string)=>setFormulario({...formulario, destino: t})} />
+                    
+                    <TouchableOpacity style={styles.btnFullOrange} onPress={iniciarViaje}>
+                        <Text style={styles.btnText}>COMENZAR VIAJE</Text>
+                    </TouchableOpacity>
+                    <View style={{height:60}}/>
+                </ScrollView>
+            </View>
+        </View>
+      </Modal>
+
+      {/* MODAL PAUSA */}
+      <Modal visible={modalPausa} transparent>
+          <View style={[styles.modalOverlay, {justifyContent:'center'}]}>
+              <View style={[styles.modalContent, {borderRadius:20}]}>
+                  <Text style={styles.sectionHeader}>Registrar Pausa</Text>
+                  <View style={{flexDirection:'row', flexWrap:'wrap', gap:10}}>
+                      {["Alimentos", "Descanso", "Combustible", "Mecánica"].map((m) => (
+                          <TouchableOpacity key={m} style={styles.chip} onPress={() => activarPausa(m)}>
+                              <Text style={{color:'white'}}>{m}</Text>
+                          </TouchableOpacity>
+                      ))}
+                  </View>
+                  <TouchableOpacity onPress={()=>setModalPausa(false)} style={{marginTop:20, alignSelf:'center'}}>
+                      <Text style={{color:COLORS.subtext}}>Cancelar</Text>
+                  </TouchableOpacity>
+              </View>
+          </View>
+      </Modal>
+
+      {/* MODAL INCIDENCIA */}
+      <Modal visible={modalIncidencia} transparent>
+          <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                  <Text style={styles.sectionHeader}>Reportar Incidencia</Text>
+                  <InputDark label="Descripción" val={descIncidencia} set={setDescIncidencia} multiline />
+                  <TouchableOpacity style={styles.btnFullOrange} onPress={reportarIncidencia}>
+                      <Text style={styles.btnText}>REPORTAR</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={()=>setModalIncidencia(false)} style={{marginTop:20, alignSelf:'center'}}>
+                      <Text style={{color:COLORS.subtext}}>Cancelar</Text>
+                  </TouchableOpacity>
+              </View>
+          </View>
+      </Modal>
+
+      {/* MODAL FIRMA */}
+      <Modal visible={modalFirma}>
+          <View style={{flex:1, backgroundColor: COLORS.bg}}>
+              <FirmaDigital onOK={confirmarCierreConFirma} onCancel={() => setModalFirma(false)} />
+          </View>
+      </Modal>
+    </View>
   );
 }
 
+const InputDark = ({ label, val, set, placeholder, flex, multiline }: any) => (
+  <View style={[{ marginBottom: 10 }, flex && { flex: 1, marginRight:5 }]}>
+    <Text style={{color:COLORS.subtext, fontSize:12, marginBottom:4}}>{label}</Text>
+    <TextInput 
+        style={[styles.input, multiline && {height:80}]} 
+        value={val} 
+        onChangeText={set} 
+        placeholder={placeholder} 
+        placeholderTextColor="#555" 
+        multiline={multiline} 
+    />
+  </View>
+);
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1e272e' },
-  scrollContainer: { flexGrow: 1, padding: 20, backgroundColor: '#1e272e' },
-  center: { justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  timerCardNew: { margin: 20, padding: 20, borderRadius: 16, backgroundColor: COLORS.card, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, elevation: 8 },
+  timerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  cardLabelNew: { color: COLORS.subtext, fontSize: 12, fontWeight: '600', letterSpacing: 1 },
+  statusBadgeNew: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  statusTextNew: { color: COLORS.bg, fontSize: 12, fontWeight: 'bold' },
+  btnReportarNew: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: COLORS.warning },
+  txtReportarNew: { color: COLORS.warning, fontSize: 12, fontWeight: 'bold', marginLeft: 5 },
+  mainTimerContainer: { marginVertical: 15 },
+  mainTimerText: { color: COLORS.white, fontSize: 48, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
+  subTimerText: { color: COLORS.subtext, fontSize: 18, marginLeft: 5 },
+  progressBarBgNew: { height: 6, backgroundColor: '#0f172a', borderRadius: 3, marginTop: 5 },
+  progressBarFillNew: { height: 6, borderRadius: 3 },
+  progressLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
+  progressLabelText: { color: COLORS.subtext, fontSize: 10 },
+  dividerNew: { height: 1, backgroundColor: '#334155', marginVertical: 15 },
+  footerTimer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  footerLabel: { color: COLORS.subtext, fontSize: 14 },
+  footerTimerText: { color: COLORS.white, fontSize: 18, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
+  footerSubTimerText: { color: COLORS.subtext, fontSize: 14, marginLeft: 5 },
   
-  header: { marginBottom: 20, alignItems: 'center' },
-  titulo: { fontSize: 28, fontWeight: 'bold', color: '#ecf0f1', textTransform: 'uppercase' },
-  subtitulo: { fontSize: 16, color: '#bdc3c7', marginTop: 5 },
-
-  card: { marginBottom: 20 },
-
-  infoContainer: { 
-    backgroundColor: '#2d3436', 
-    borderRadius: 10, 
-    padding: 15, 
-    marginBottom: 30,
-    borderWidth: 1,
-    borderColor: '#485460'
+  // MAPA
+  mapContainer: { 
+    marginHorizontal: 20, 
+    backgroundColor: COLORS.card, 
+    borderRadius: 16, 
+    overflow: 'hidden', 
+    borderWidth: 1, 
+    borderColor: COLORS.border,
+    height: 350 
   },
-  infoRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#485460',
-    paddingBottom: 5
-  },
-  label: { color: '#bdc3c7', fontSize: 16 },
-  valor: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
 
-  botonera: { marginBottom: 20 },
-  boton: {
-    paddingVertical: 25,
-    borderRadius: 15,
-    alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.30,
-    shadowRadius: 4.65,
-    elevation: 8,
-  },
-  botonIniciar: { backgroundColor: '#27ae60' },
-  botonFinalizar: { backgroundColor: '#c0392b' },
-  textoBoton: { color: 'white', fontSize: 22, fontWeight: 'bold', letterSpacing: 1 },
-
-  botonSecundario: { padding: 15, alignItems: 'center' },
-  textoSecundario: { color: '#3498db', fontSize: 18, textDecorationLine: 'underline' }
+  bottomBarBig: { position: 'absolute', bottom: 0, width: '100%', flexDirection: 'row', padding: 15, paddingBottom: 25, backgroundColor: COLORS.bg },
+  btnBigBase: { flex: 1, borderRadius: 12, padding: 15, justifyContent: 'center' },
+  btnBigTitle: { color: COLORS.white, fontWeight: 'bold', fontSize: 16 },
+  btnBigSub: { color: 'rgba(255,255,255,0.7)', fontSize: 10, marginTop: 2 },
+  modalOverlay: { flex: 1, backgroundColor: COLORS.modalOverlay, justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: COLORS.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '90%' },
+  sectionHeader: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary, marginBottom: 15 },
+  labelSection: { color: COLORS.white, fontWeight: 'bold', marginTop: 15, marginBottom: 5 },
+  input: { backgroundColor: COLORS.bg, color: COLORS.text, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: COLORS.border },
+  row: { flexDirection: 'row', justifyContent: 'space-between' },
+  switch: { flex:1, padding:10, alignItems:'center', borderWidth:1, borderColor: COLORS.border, borderRadius:6, marginHorizontal:2 },
+  switchActive: { backgroundColor: COLORS.primary },
+  chip: { backgroundColor: COLORS.border, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20 },
+  btnFullOrange: { backgroundColor: COLORS.primary, padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 15 },
+  btnText: { fontWeight: 'bold', color: '#000' },
 });
-

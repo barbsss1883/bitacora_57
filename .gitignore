@@ -1,29 +1,48 @@
-Expo
-​.expo/
-dist/
-web-build/
-​Node.js
-​node_modules/
+# Node
+node_modules/
 npm-debug.log
+yarn-debug.log
 yarn-error.log
-​Mac/Windows/Linux System Files
-​.DS_Store
-Thumbs.db
-​IDEs
-​.idea/
+
+# Expo
+.expo/
+.expo-shared/
+.expo/*
+.expo-shared/*
+
+# Metro bundler
+.metro-cache/
+.cache/
+
+# Build outputs
+dist/
+build/
+web-build/
+android/
+ios/
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+debug/
+AndroidStudio/
 .vscode/
-*.swp
-*.swo
-​Android/iOS Builds (Artifacts)
-​android/app/build/
-android/app/src/main/assets/
-ios/Pods/
-ios/build/
-​Keys and Secrets (Seguridad)
-​*.jks
-*.keystore
-*.p12
-*.key
-credentials.json
-google-services.json
-GoogleService-Info.plist
+
+# Environment
+.env
+.env.*
+.env.local
+
+# Temporary
+tmp/
+temp/
+.DS_Store
+Thumbs.db
+
+# Database caches
+db/*.sqlite
+db/*.db
+db/*.sqlite3

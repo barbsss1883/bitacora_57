@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "363075260432",
+    "project_id": "device-streaming-61499c4a",
+    "storage_bucket": "device-streaming-61499c4a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:363075260432:android:ed460e5c23c7a4d5dbba95",
+        "android_client_info": {
+          "package_name": "com.luisg0418.Bitacora57"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "363075260432-f3s3kn5oecajmrnvcbtjojf9s3701aue.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.luisg0418.Bitacora57",
+            "certificate_hash": "b6f5ec940ce67f9a4ad6f28130e5756a9bc6f3d3"
+          }
+        },
+        {
+          "client_id": "363075260432-rnpgeksdddrktn8816gvkdfg6oqqikdq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.luisg0418.Bitacora57",
+            "certificate_hash": "f98cc93ef006c262dd16bb74917486f0b769a92a"
+          }
+        },
+        {
+          "client_id": "363075260432-73vjlu0ukn1u59sjgf5dpi1mkunda880.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5yqF31xg4hiBZCqGnLZWH1KAgTZj-uA0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "363075260432-73vjlu0ukn1u59sjgf5dpi1mkunda880.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
