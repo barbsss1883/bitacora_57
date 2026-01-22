@@ -8,7 +8,7 @@ interface FirmaProps {
 }
 
 export default function FirmaDigital({ onOK, onCancel }: FirmaProps) {
-  const ref = useRef<any>();
+  const ref = useRef<any>(null);
 
   const handleOK = (signature: string) => {
     // signature viene como "data:image/png;base64,..."

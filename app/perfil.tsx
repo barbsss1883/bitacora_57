@@ -1,232 +1,240 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ScrollView, Modal, TextInput, FlatList } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Image } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker'; 
-
-import { obtenerEstadisticasUsuario, guardarDocumento, obtenerDocumentosUsuario, eliminarDocumento } from '../db/database';
+import { doc, setDoc } from 'firebase/firestore'; 
+import { db_firestore } from '../src/services/firebaseConfig';
 
 const COLORS = {
-  bg: '#0f172a', card: '#1e293b', primary: '#f59e0b', text: '#f8fafc', subtext: '#94a3b8', danger: '#ef4444', border: '#334155'
+  bg: '#0f172a',
+  card: '#1e293b',
+  primary: '#f59e0b',
+  text: '#f8fafc',
+  subtext: '#94a3b8',
+  inputBg: '#334155',
+  danger: '#ef4444',
+  success: '#10b981'
 };
 
 export default function Perfil() {
   const router = useRouter();
-  const [usuario, setUsuario] = useState<any>(null);
-  const [stats, setStats] = useState({ viajes: 0, km: 0 });
-  const [documentos, setDocumentos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   
-  // MODALES
-  const [modalEdit, setModalEdit] = useState(false);
-  const [modalDocs, setModalDocs] = useState(false);
+  const [nombre, setNombre] = useState('');
+  const [licencia, setLicencia] = useState('');
+  const [empresa, setEmpresa] = useState('');
+  const [foto, setFoto] = useState<string | null>(null);
   
-  const [editData, setEditData] = useState({ nombre: '', licencia: '', unidad: '' });
+  const [docLicencia, setDocLicencia] = useState<{uri: string, name: string, type: string} | null>(null);
+  const [fotoIne, setFotoIne] = useState<string | null>(null);
 
-  useEffect(() => { cargarDatos(); }, []);
+  useEffect(() => {
+    cargarDatos();
+  }, []);
 
   const cargarDatos = async () => {
-    try {
-      const session = await AsyncStorage.getItem('USER_SESSION');
-      const presets = await AsyncStorage.getItem('FORM_PRESETS');
-      
-      if (session) {
-        const u = JSON.parse(session);
-        setUsuario(u);
-        cargarDocumentos(u.id); // Cargar docs de este usuario
-        
-        let p = presets ? JSON.parse(presets) : {};
-        setEditData({ nombre: u.nombre || '', licencia: p.licencia || '', unidad: p.unidad || '' });
-      }
-      const estadisticas = await obtenerEstadisticasUsuario();
-      // @ts-ignore
-      setStats(estadisticas);
-    } catch (e) {}
-  };
-
-  const cargarDocumentos = async (uid: number) => {
-    const docs: any = await obtenerDocumentosUsuario(uid);
-    setDocumentos(docs || []);
-  };
-
-  const subirDocumento = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf'],
-        copyToCacheDirectory: true
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        // Guardar en BD
-        await guardarDocumento(usuario.id, file.name, file.uri, file.mimeType || 'file');
-        Alert.alert("✅ Subido", "Documento guardado correctamente.");
-        cargarDocumentos(usuario.id); // Recargar lista
-      }
-    } catch (e) {
-      Alert.alert("Error", "No se pudo cargar el archivo.");
+    const userSession = await AsyncStorage.getItem('USER_SESSION');
+    if (userSession) {
+      const data = JSON.parse(userSession);
+      setNombre(data.nombre || '');
+      setLicencia(data.licencia || '');
+      setEmpresa(data.empresa || 'PARTICULAR');
+      setFoto(data.foto || null);
+      setDocLicencia(data.docLicencia || null);
+      setFotoIne(data.fotoIne || null);
     }
   };
 
-  const borrarDoc = async (id: number) => {
-    Alert.alert("Eliminar", "¿Borrar este documento?", [
-      { text: "Cancelar" },
-      { text: "Borrar", style: 'destructive', onPress: async () => {
-        await eliminarDocumento(id);
-        cargarDocumentos(usuario.id);
-      }}
-    ]);
+  const seleccionarFotoPerfil = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    });
+    if (!result.canceled && result.assets[0].base64) {
+      setFoto(`data:image/jpeg;base64,${result.assets[0].base64}`);
+    }
   };
 
-  const guardarCambios = async () => {
-    const nuevoUsuario = { ...usuario, nombre: editData.nombre };
-    await AsyncStorage.setItem('USER_SESSION', JSON.stringify(nuevoUsuario));
-    setUsuario(nuevoUsuario);
-    const prevPresets = await AsyncStorage.getItem('FORM_PRESETS');
-    const nuevosPresets = prevPresets ? JSON.parse(prevPresets) : {};
-    nuevosPresets.operador = editData.nombre;
-    nuevosPresets.licencia = editData.licencia;
-    nuevosPresets.unidad = editData.unidad;
-    await AsyncStorage.setItem('FORM_PRESETS', JSON.stringify(nuevosPresets));
-    setModalEdit(false);
-    Alert.alert("Actualizado", "Datos guardados.");
+  const seleccionarLicencia = async () => {
+    Alert.alert(
+      "Subir Licencia",
+      "Selecciona el formato de tu documento",
+      [
+        {
+          text: "Imagen / Cámara",
+          onPress: async () => {
+            let res = await ImagePicker.launchImageLibraryAsync({ quality: 0.5, base64: true });
+            if (!res.canceled) {
+               setDocLicencia({ uri: res.assets[0].uri, name: 'licencia.jpg', type: 'image' });
+            }
+          }
+        },
+        {
+          text: "Archivo PDF",
+          onPress: async () => {
+            let res = await DocumentPicker.getDocumentAsync({ type: 'application/pdf' });
+            if (!res.canceled) {
+              setDocLicencia({ uri: res.assets[0].uri, name: res.assets[0].name, type: 'pdf' });
+            }
+          }
+        },
+        { text: "Cancelar", style: "cancel" }
+      ]
+    );
   };
 
-  const cerrarSesion = async () => {
-    Alert.alert("Cerrar Sesión", "¿Seguro que quieres salir?", [
+  const seleccionarIne = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({ quality: 0.5, base64: true });
+    if (!result.canceled) setFotoIne(result.assets[0].uri);
+  };
+
+  const guardarPerfil = async () => {
+    if (!nombre || !licencia) {
+      Alert.alert('Error', 'Nombre y Licencia son obligatorios');
+      return;
+    }
+    setLoading(true);
+    try {
+      const perfilUsuario = {
+        id: Date.now().toString(),
+        nombre, licencia, empresa: empresa.toUpperCase().trim() || 'PARTICULAR',
+        foto, docLicencia, fotoIne,
+        fecha_actualizacion: new Date().toISOString()
+      };
+      await AsyncStorage.setItem('USER_SESSION', JSON.stringify(perfilUsuario));
+      await setDoc(doc(db_firestore, "usuarios", licencia), perfilUsuario);
+      Alert.alert('Éxito', 'Perfil actualizado correctamente');
+      router.back();
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo guardar');
+    } finally { setLoading(false); }
+  };
+
+  const cerrarSesion = () => {
+    Alert.alert("Cerrar Sesión", "¿Deseas salir?", [
       { text: "Cancelar", style: "cancel" },
       { text: "Salir", style: "destructive", onPress: async () => {
           await AsyncStorage.removeItem('USER_SESSION');
-          router.replace('/login');
+          router.replace('/index');
       }}
     ]);
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.avatarContainer}>
-          <Image source={{ uri: usuario?.foto || 'https://cdn-icons-png.flaticon.com/512/149/149071.png' }} style={styles.avatar} />
+        <TouchableOpacity onPress={() => router.back()}>
+          <MaterialCommunityIcons name="arrow-left" size={28} color={COLORS.primary} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Mi Perfil</Text>
+        <View style={{width: 28}} />
+      </View>
+
+      <ScrollView contentContainerStyle={{padding: 20}}>
+        <View style={{alignItems:'center', marginBottom: 20}}>
+          <TouchableOpacity onPress={seleccionarFotoPerfil} style={styles.avatarContainer}>
+            {foto ? <Image source={{ uri: foto }} style={styles.avatar} /> : <MaterialCommunityIcons name="camera-plus" size={40} color={COLORS.subtext} />}
+          </TouchableOpacity>
+          <Text style={styles.hint}>Foto de Perfil</Text>
         </View>
-        <Text style={styles.name}>{usuario?.nombre || "Operador"}</Text>
-        <Text style={styles.email}>{usuario?.email || usuario?.usuario || "Sin correo"}</Text>
-      </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}><Text style={styles.statNumber}>{stats.viajes}</Text><Text style={styles.statLabel}>VIAJES</Text></View>
-        <View style={styles.statCard}><Text style={styles.statNumber}>{stats.km}</Text><Text style={styles.statLabel}>KM APROX</Text></View>
-      </View>
+        <Text style={styles.label}>Nombre Completo</Text>
+        <TextInput style={styles.input} value={nombre} onChangeText={setNombre} placeholderTextColor={COLORS.subtext} />
 
-      <View style={styles.menu}>
-        <TouchableOpacity style={styles.menuItem} onPress={() => setModalEdit(true)}>
-          <MaterialCommunityIcons name="account-edit" size={24} color={COLORS.primary} />
-          <Text style={styles.menuText}>Editar Datos Personales</Text>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={COLORS.subtext} />
-        </TouchableOpacity>
-        
-        {/* BOTÓN DOCUMENTOS */}
-        <TouchableOpacity style={styles.menuItem} onPress={() => setModalDocs(true)}>
-          <MaterialCommunityIcons name="file-document" size={24} color={COLORS.primary} />
-          <Text style={styles.menuText}>Mis Licencias y Documentos</Text>
-          <View style={styles.badge}><Text style={{color:'white', fontSize:10}}>{documentos.length}</Text></View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={COLORS.subtext} />
-        </TouchableOpacity>
-
-        {/* --- NUEVO BOTÓN: CONFIGURACIÓN Y RESPALDO --- */}
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/configuracion')}>
-          <MaterialCommunityIcons name="cog" size={24} color={COLORS.primary} />
-          <Text style={styles.menuText}>Configuración y Respaldo</Text>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={COLORS.subtext} />
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity style={styles.btnLogout} onPress={cerrarSesion}>
-        <Text style={styles.txtLogout}>CERRAR SESIÓN</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.version}>Bitácora57 v1.0.7</Text>
-
-      {/* MODAL EDICIÓN PERFIL */}
-      <Modal visible={modalEdit} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Editar Perfil</Text>
-            <Text style={styles.label}>Nombre</Text><TextInput style={styles.input} value={editData.nombre} onChangeText={(t)=>setEditData({...editData, nombre:t})} />
-            <Text style={styles.label}>Licencia (Default)</Text><TextInput style={styles.input} value={editData.licencia} onChangeText={(t)=>setEditData({...editData, licencia:t})} />
-            <Text style={styles.label}>Unidad Favorita</Text><TextInput style={styles.input} value={editData.unidad} onChangeText={(t)=>setEditData({...editData, unidad:t})} />
-            <TouchableOpacity style={styles.btnSave} onPress={guardarCambios}><Text style={styles.txtBtn}>GUARDAR</Text></TouchableOpacity>
-            <TouchableOpacity style={{marginTop:15}} onPress={()=>setModalEdit(false)}><Text style={{color: COLORS.subtext, textAlign:'center'}}>Cancelar</Text></TouchableOpacity>
+        <View style={styles.row}>
+          <View style={{flex:1, marginRight:10}}>
+            <Text style={styles.label}>No. Licencia</Text>
+            <TextInput style={styles.input} value={licencia} onChangeText={setLicencia} placeholderTextColor={COLORS.subtext} />
+          </View>
+          <View style={{flex:1}}>
+            <Text style={styles.label}>Empresa</Text>
+            <TextInput style={styles.input} value={empresa} onChangeText={setEmpresa} autoCapitalize="characters" placeholderTextColor={COLORS.subtext} />
           </View>
         </View>
-      </Modal>
 
-      {/* MODAL DOCUMENTOS */}
-      <Modal visible={modalDocs} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, {height:'80%'}]}>
-            <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom:15}}>
-              <Text style={styles.modalTitle}>Mis Documentos</Text>
-              <TouchableOpacity onPress={subirDocumento} style={{backgroundColor: COLORS.primary, padding:5, borderRadius:5}}>
-                <Text style={{color:'white', fontWeight:'bold'}}>+ SUBIR</Text>
-              </TouchableOpacity>
-            </View>
-            
-            {documentos.length === 0 ? (
-              <Text style={{color: COLORS.subtext, textAlign:'center', marginTop:20}}>No has subido documentos aún.</Text>
+        <Text style={[styles.label, {marginTop: 25}]}>Documentación Legal</Text>
+        <View style={styles.row}>
+          <TouchableOpacity 
+            style={[styles.docCard, docLicencia && {borderColor: COLORS.success, borderStyle: 'solid'}]} 
+            onPress={seleccionarLicencia}
+          >
+            {docLicencia ? (
+              <View style={styles.pdfPreview}>
+                <MaterialCommunityIcons 
+                  name={docLicencia.type === 'pdf' ? "file-pdf-box" : "image-check"} 
+                  size={40} 
+                  color={COLORS.success} 
+                />
+                <Text style={styles.pdfText} numberOfLines={1}>{docLicencia.name}</Text>
+                <Text style={styles.reemplazarText}>Toca para cambiar</Text>
+              </View>
             ) : (
-              <FlatList
-                data={documentos}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({item}) => (
-                  <View style={styles.docItem}>
-                    <MaterialCommunityIcons name={item.tipo.includes('pdf') ? 'file-pdf-box' : 'image'} size={30} color={COLORS.text} />
-                    <View style={{flex:1, marginLeft:10}}>
-                      <Text style={{color:'white', fontWeight:'bold'}}>{item.nombre}</Text>
-                      <Text style={{color: COLORS.subtext, fontSize:10}}>{new Date(item.fecha).toLocaleDateString()}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => borrarDoc(item.id)}>
-                      <MaterialCommunityIcons name="trash-can" size={20} color={COLORS.danger} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              />
+              <View style={{alignItems:'center'}}>
+                <MaterialCommunityIcons name="card-account-details-outline" size={32} color={COLORS.primary} />
+                <Text style={styles.docText}>Licencia (PDF/JPG)</Text>
+              </View>
             )}
-            
-            <TouchableOpacity style={{marginTop:15, alignSelf:'center'}} onPress={()=>setModalDocs(false)}>
-              <Text style={{color: COLORS.subtext}}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </TouchableOpacity>
 
-    </ScrollView>
+          <TouchableOpacity 
+            style={[styles.docCard, fotoIne && {borderColor: COLORS.success, borderStyle: 'solid'}]} 
+            onPress={seleccionarIne}
+          >
+            {fotoIne ? (
+              <View style={{width: '100%', height: '100%'}}>
+                <Image source={{ uri: fotoIne }} style={styles.docImage} />
+                <View style={styles.overlayCheck}>
+                   <MaterialCommunityIcons name="check-circle" size={20} color={COLORS.success} />
+                </View>
+              </View>
+            ) : (
+              <View style={{alignItems:'center'}}>
+                <MaterialCommunityIcons name="id-card" size={32} color={COLORS.primary} />
+                <Text style={styles.docText}>INE / ID (Foto)</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.btnSave} onPress={guardarPerfil} disabled={loading}>
+          {loading ? <ActivityIndicator color="#0f172a" /> : <Text style={styles.btnText}>GUARDAR CAMBIOS</Text>}
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.btnLogout} onPress={cerrarSesion}>
+          <MaterialCommunityIcons name="logout" size={20} color={COLORS.danger} style={{marginRight: 8}} />
+          <Text style={styles.btnLogoutText}>CERRAR SESIÓN</Text>
+        </TouchableOpacity>
+        <View style={{height: 40}} />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  header: { alignItems: 'center', padding: 30, backgroundColor: COLORS.card, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  avatarContainer: { marginBottom: 15 },
-  avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: COLORS.primary },
-  name: { fontSize: 24, fontWeight: 'bold', color: COLORS.text },
-  email: { fontSize: 14, color: COLORS.subtext },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 20 },
-  statCard: { alignItems: 'center', backgroundColor: COLORS.card, padding: 15, borderRadius: 15, width: '30%', borderWidth: 1, borderColor: COLORS.border },
-  statNumber: { fontSize: 22, fontWeight: 'bold', color: COLORS.primary },
-  statLabel: { fontSize: 10, color: COLORS.subtext, marginTop: 5 },
-  menu: { padding: 20 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.card, padding: 15, borderRadius: 12, marginBottom: 10 },
-  menuText: { flex: 1, color: COLORS.text, marginLeft: 15, fontSize: 16 },
-  badge: { backgroundColor: COLORS.danger, paddingHorizontal:8, borderRadius:10, marginRight:5 },
-  btnLogout: { margin: 20, backgroundColor: COLORS.danger, padding: 15, borderRadius: 12, alignItems: 'center' },
-  txtLogout: { color: 'white', fontWeight: 'bold' },
-  version: { textAlign: 'center', color: COLORS.subtext, marginBottom: 30 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: COLORS.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: COLORS.border },
-  modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: 'bold', marginBottom: 20 },
-  label: { color: COLORS.subtext, fontSize: 12, marginBottom: 5 },
-  input: { backgroundColor: COLORS.bg, color: 'white', padding: 12, borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: COLORS.border },
-  btnSave: { backgroundColor: COLORS.primary, padding: 15, borderRadius: 10, alignItems: 'center' },
-  txtBtn: { color: 'white', fontWeight: 'bold' },
-  docItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderColor: COLORS.border, marginBottom: 5 }
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 50, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: '#334155' },
+  title: { color: COLORS.text, fontSize: 20, fontWeight: 'bold' },
+  avatarContainer: { width: 90, height: 90, borderRadius: 45, backgroundColor: COLORS.inputBg, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.primary, overflow: 'hidden' },
+  avatar: { width: '100%', height: '100%' },
+  hint: { color: COLORS.subtext, fontSize: 11, marginTop: 5 },
+  label: { color: COLORS.primary, fontSize: 13, fontWeight: 'bold', marginBottom: 8, marginTop: 12 },
+  input: { backgroundColor: COLORS.inputBg, color: COLORS.text, borderRadius: 10, padding: 12, fontSize: 15, borderWidth: 1, borderColor: '#475569' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
+  docCard: { flex: 1, height: 110, backgroundColor: COLORS.inputBg, borderRadius: 12, marginHorizontal: 5, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: COLORS.primary, overflow: 'hidden' },
+  docImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  docText: { color: COLORS.subtext, fontSize: 10, marginTop: 5, fontWeight: 'bold', paddingHorizontal: 5 },
+  btnSave: { backgroundColor: COLORS.primary, borderRadius: 12, padding: 18, alignItems: 'center', marginTop: 30 },
+  btnText: { color: '#0f172a', fontWeight: 'bold', fontSize: 15 },
+  btnLogout: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 15, padding: 15, borderRadius: 12, borderWidth: 1, borderColor: '#334155' },
+  btnLogoutText: { color: COLORS.danger, fontWeight: 'bold', fontSize: 13 },
+  pdfPreview: { alignItems: 'center', justifyContent: 'center', padding: 10, width: '100%' },
+  pdfText: { color: '#f8fafc', fontSize: 9, fontWeight: 'bold', marginTop: 5, textAlign: 'center' },
+  reemplazarText: { color: '#94a3b8', fontSize: 8, textTransform: 'uppercase', marginTop: 2 },
+  overlayCheck: { position: 'absolute', top: 5, right: 5, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 10 }
 });

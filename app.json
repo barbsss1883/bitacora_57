@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "dark",
-    "owner": "luis0418",
+    "owner": "luis_g0418",
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
@@ -25,7 +25,12 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
+        "FOREGROUND_SERVICE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "config": {
         "googleMaps": {
@@ -56,8 +61,11 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d630e51d-c603-4e63-b9a2-bb88ab340f13"
+        "projectId": "cb800572-f34c-4856-bf37-078f5b4b7fda"
       }
+    },
+    "ios": {
+      "bundleIdentifier": "com.luisg0418.Bitacora57"
     }
   }
 }

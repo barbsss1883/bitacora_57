@@ -56,7 +56,7 @@ const MapaRuta = () => {
     setDescargandoMapa(true);
     try {
         const bounds = [[ultimoPunto[0] - 0.5, ultimoPunto[1] - 0.5], [ultimoPunto[0] + 0.5, ultimoPunto[1] + 0.5]];
-        await Mapbox.offlineManager.createPack({ name: `ruta-${Date.now()}`, styleURL: 'mapbox://styles/mapbox/navigation-night-v1', minZoom: 10, maxZoom: 16, bounds: bounds }, (p) => setProgresoDescarga(Math.round(p.percentage)));
+        await Mapbox.offlineManager.createPack({ name: `ruta-${Date.now()}`, styleURL: 'mapbox://styles/mapbox/navigation-night-v1', minZoom: 10, maxZoom: 16, bounds: bounds as any }, (p: any) => setProgresoDescarga(Math.round(p.percentage)));
         Alert.alert("¡Listo!", "Mapa guardado para uso sin internet.");
     } catch (e) { Alert.alert("Error", "Fallo descarga."); } finally { setDescargandoMapa(false); setProgresoDescarga(0); }
   };
@@ -130,7 +130,7 @@ const MapaRuta = () => {
     <View style={styles.page}>
       <View style={styles.container}>
         <Mapbox.MapView style={styles.map} styleURL={'mapbox://styles/mapbox/navigation-night-v1'} logoEnabled={false} attributionEnabled={false} scaleBarEnabled={false}>
-            <Mapbox.Camera ref={cameraRef} zoomLevel={4} followUserMode={'course'} pitch={50} />
+            <Mapbox.Camera ref={cameraRef} zoomLevel={4} followUserMode={'course' as any} pitch={50} />
             
             {/* CONFIGURACIÓN CRÍTICA PARA CURVAS SUAVES: minDisplacement={3} */}
             <Mapbox.UserLocation 
@@ -147,7 +147,7 @@ const MapaRuta = () => {
                 <Mapbox.LineLayer id="rutaLinea" style={{ lineColor: '#0ea5e9', lineWidth: 6, lineCap: 'round', lineJoin: 'round', lineOpacity: 0.8 }} />
             </Mapbox.ShapeSource>
 
-            <Mapbox.ShapeSource id="trampasSource" shape={trampasData}>
+            <Mapbox.ShapeSource id="trampasSource" shape={trampasData as any}>
                 <Mapbox.CircleLayer id="trampasCirculo" style={{ circleRadius: 8, circleColor: ['get', 'color'], circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }} />
                 <Mapbox.SymbolLayer id="trampasTexto" style={{ textField: ['get', 'titulo'], textSize: 10, textColor: '#ffffff', textOffset: [0, -1.5] }} />
             </Mapbox.ShapeSource>

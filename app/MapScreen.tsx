@@ -31,7 +31,7 @@ const MapScreen = () => {
             animationMode={'flyTo'}
             animationDuration={2000}
             followUserLocation={true} // ¡Esto hace que la cámara siga al chofer!
-            followUserMode={'course'} // 'course' rota el mapa según hacia dónde vas (como Waze)
+            followUserMode={'course' as any} // 'course' rota el mapa según hacia dónde vas (como Waze)
           />
 
           {/* 4. El punto azul del usuario */}

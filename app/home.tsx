@@ -1,23 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Image, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location'; // IMPORTANTE: Para pedir permiso antes de navegar
+import { collection, getDocs, query, limit, orderBy } from 'firebase/firestore';
+import { db_firestore } from '../src/services/firebaseConfig'; // Tu conexión real
 
 const COLORS = {
   bg: '#0f172a',
   card: '#1e293b',
   primary: '#f59e0b',
   text: '#f8fafc',
-  subtext: '#94a3b8'
+  subtext: '#94a3b8',
+  danger: '#ef4444'
 };
 
 export default function Home() {
   const router = useRouter();
   const [usuario, setUsuario] = useState<any>(null);
+  const [riesgos, setRiesgos] = useState<number>(0);
+  const [loadingIntel, setLoadingIntel] = useState(true);
 
   useEffect(() => {
     cargarUsuario();
+    cargarInteligencia();
   }, []);
 
   const cargarUsuario = async () => {
@@ -25,9 +32,40 @@ export default function Home() {
     if (user) setUsuario(JSON.parse(user));
   };
 
+  // --- NUEVO: Consulta la nube para ver alertas recientes ---
+  const cargarInteligencia = async () => {
+    try {
+        // Consultamos las últimas zonas de riesgo reportadas por otros
+        const q = query(collection(db_firestore, "zonas_riesgo"), orderBy("fecha", "desc"), limit(5));
+        const snapshot = await getDocs(q);
+        setRiesgos(snapshot.size);
+    } catch (e) {
+        console.log("Modo Offline: No se pudo cargar inteligencia");
+    } finally {
+        setLoadingIntel(false);
+    }
+  };
+
   const cerrarSesion = async () => {
     await AsyncStorage.removeItem('USER_SESSION');
     router.replace('/');
+  };
+
+  // --- SOLUCIÓN DEL BUG: Pedir permiso ANTES de navegar ---
+  const irAJornada = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+          Alert.alert(
+              "Permiso Requerido", 
+              "Para iniciar el viaje y activar el mapa, necesitamos acceso a tu ubicación.",
+              [{ text: "Entendido" }]
+          );
+          return;
+      }
+
+      // Si hay permiso, ahora sí navegamos seguro
+      router.push('/jornadaEnCurso');
   };
 
   return (
@@ -53,11 +91,37 @@ export default function Home() {
 
       <ScrollView contentContainerStyle={{padding: 20}}>
         
+        {/* --- NUEVO WIDGET DE INTELIGENCIA VIAL --- */}
+        <View style={styles.intelCard}>
+            <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start'}}>
+                <View>
+                    <Text style={styles.intelTitle}>INTELIGENCIA VIAL</Text>
+                    <Text style={styles.intelSub}>Reportes de flota en tiempo real</Text>
+                </View>
+                <MaterialCommunityIcons name="radar" size={24} color={COLORS.primary} />
+            </View>
+            
+            <View style={{marginTop: 15, flexDirection:'row', alignItems:'center'}}>
+                {loadingIntel ? (
+                    <ActivityIndicator color={COLORS.primary} size="small"/>
+                ) : (
+                    <>
+                        <Text style={[styles.intelNumber, {color: riesgos > 0 ? COLORS.danger : COLORS.text}]}>
+                            {riesgos}
+                        </Text>
+                        <Text style={styles.intelLabel}>
+                            {riesgos === 1 ? 'Zona de Riesgo Activa' : 'Zonas de Riesgo Activas'}
+                        </Text>
+                    </>
+                )}
+            </View>
+        </View>
+
         <Text style={styles.sectionTitle}>OPERACIÓN</Text>
         
         <View style={styles.grid}>
-            {/* 1. JORNADA */}
-            <TouchableOpacity style={styles.card} onPress={() => router.push('/jornadaEnCurso')}>
+            {/* 1. JORNADA (AHORA CON PROTECCIÓN DE PERMISOS) */}
+            <TouchableOpacity style={styles.card} onPress={irAJornada}>
                 <View style={[styles.iconBox, {backgroundColor: 'rgba(245, 158, 11, 0.2)'}]}>
                     <MaterialCommunityIcons name="steering" size={32} color={COLORS.primary} />
                 </View>
@@ -65,7 +129,7 @@ export default function Home() {
                 <Text style={styles.cardSub}>Bitácora y GPS</Text>
             </TouchableOpacity>
 
-            {/* 2. INSPECCIÓN (RECUPERADA) */}
+            {/* 2. INSPECCIÓN */}
             <TouchableOpacity style={styles.card} onPress={() => router.push('/inspeccionVisual')}>
                 <View style={[styles.iconBox, {backgroundColor: 'rgba(139, 92, 246, 0.2)'}]}>
                     <MaterialCommunityIcons name="clipboard-check-outline" size={32} color="#8b5cf6" />
@@ -127,6 +191,16 @@ const styles = StyleSheet.create({
   welcomeText: { color: COLORS.subtext, fontSize: 12 },
   userName: { color: COLORS.text, fontSize: 18, fontWeight: 'bold' },
   
+  // WIDGET INTELIGENCIA
+  intelCard: {
+      backgroundColor: 'rgba(15, 23, 42, 0.6)', borderWidth: 1, borderColor: '#334155',
+      borderRadius: 16, padding: 15, marginBottom: 25
+  },
+  intelTitle: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12, letterSpacing: 1 },
+  intelSub: { color: COLORS.subtext, fontSize: 10 },
+  intelNumber: { fontSize: 24, fontWeight: 'bold', marginRight: 10 },
+  intelLabel: { color: COLORS.text, fontSize: 14 },
+
   sectionTitle: { color: COLORS.subtext, fontSize: 12, fontWeight:'bold', marginBottom: 15, letterSpacing:1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 15 },
   

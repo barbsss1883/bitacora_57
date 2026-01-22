@@ -72,3 +72,56 @@ export const detenerRastreo = async () => {
     console.log("🛑 Rastreo detenido");
   }
 };
+
+/**
+ * NUEVA FUNCIÓN: GEOCODIFICACIÓN INVERSA
+ * Convierte coordenadas (lat, long) en una dirección legible (Calle, Ciudad, Estado).
+ * Si no se pasan argumentos, usa la ubicación actual del dispositivo.
+ */
+export const obtenerDireccion = async (lat?: number, long?: number): Promise<string> => {
+  try {
+    let latitude = lat;
+    let longitude = long;
+
+    // Si no se proveen coordenadas, obtenemos la posición actual (Foregound)
+    if (!latitude || !longitude) {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return "Ubicación no disponible (Permiso denegado)";
+      
+      const currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      latitude = currentLoc.coords.latitude;
+      longitude = currentLoc.coords.longitude;
+    }
+
+    // Usamos el servicio nativo de Expo para Reverse Geocoding
+    const direcciones = await Location.reverseGeocodeAsync({ latitude, longitude });
+
+    if (direcciones.length > 0) {
+      const d = direcciones[0];
+      // Construimos una cadena limpia evitando valores nulos
+      const calle = d.street || d.name || '';
+      const numero = d.streetNumber ? `#${d.streetNumber}` : '';
+      const colonia = d.district || d.subregion || '';
+      const ciudad = d.city || d.region || '';
+      const estado = d.region || '';
+      
+      // Formato preferido: "Calle #123, Colonia, Ciudad"
+      // Filtramos partes vacías para que no queden comas sueltas
+      const partes = [
+        `${calle} ${numero}`.trim(),
+        colonia,
+        ciudad !== colonia ? ciudad : null, // Evitar duplicados si ciudad y distrito son iguales
+        estado !== ciudad ? estado : null
+      ].filter(Boolean);
+
+      return partes.join(', ') || `Coordenadas: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+    }
+
+    return `Ubicación: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+
+  } catch (error) {
+    console.warn("Error obteniendo dirección:", error);
+    // En caso de error (sin internet, etc.), devolvemos las coordenadas como respaldo
+    return lat ? `${lat.toFixed(5)}, ${long.toFixed(5)}` : "Ubicación desconocida";
+  }
+};

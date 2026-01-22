@@ -1,0 +1,17 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 🔐 Jornadas certificadas (lectura pública)
+    match /jornadas/{sello} {
+      allow read: if true;      // QR + Centro de Monitoreo
+      allow write: if false;    // Nadie escribe desde cliente
+    }
+
+    // ❌ Todo lo demás bloqueado
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

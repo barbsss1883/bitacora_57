@@ -17,15 +17,28 @@ const COLORS = {
   border: '#334155', white: '#ffffff'
 };
 
+// --- ACTUALIZACIÓN NOM-006-SCT-2-2023 ---
 const PUNTOS_REVISION = [
-  { id: 'llantas', label: 'Llantas / Presión', icon: 'tire' },
-  { id: 'luces', label: 'Luces / Faros', icon: 'car-light-high' },
-  { id: 'frenos', label: 'Sistema de Frenos', icon: 'car-brake-abs' },
-  { id: 'niveles', label: 'Niveles (Aceite/Agua)', icon: 'oil' },
-  { id: 'espejos', label: 'Espejos / Parabrisas', icon: 'car-side' },
-  { id: 'documentos', label: 'Tarjeta / Seguros', icon: 'file-document-outline' },
-  { id: 'extintor', label: 'Extintor / Triángulos', icon: 'fire-extinguisher' },
-  { id: 'carroceria', label: 'Daños Carrocería', icon: 'truck' },
+  // Grupo 1: Seguridad Crítica
+  { id: 'frenos', label: '1. Frenos / Aire', icon: 'car-brake-abs' },
+  { id: 'luces', label: '2. Luces / Faros', icon: 'car-light-high' },
+  { id: 'llantas', label: '3. Llantas / Rines', icon: 'tire' },
+  { id: 'direccion', label: '4. Dirección', icon: 'steering' },
+  
+  // Grupo 2: Visibilidad y Cabina
+  { id: 'parabrisas', label: '5. Parabrisas', icon: 'wiper' },
+  { id: 'espejos', label: '6. Espejos', icon: 'car-mirror' },
+  { id: 'claxon', label: '7. Claxon', icon: 'bullhorn' },
+  
+  // Grupo 3: Motor y Fluidos
+  { id: 'niveles', label: '8. Niveles (Aceite)', icon: 'oil' },
+  { id: 'combustible', label: '9. Tanques Diesel', icon: 'gas-station' },
+  { id: 'escape', label: '10. Sist. Escape', icon: 'smog' },
+  
+  // Grupo 4: Complementarios
+  { id: 'acoplamiento', label: '11. 5ta Rueda', icon: 'link-variant' },
+  { id: 'seguridad', label: '12. Extintor/Triang', icon: 'fire-extinguisher' },
+  { id: 'documentos', label: '13. Documentos', icon: 'file-document-outline' },
 ];
 
 export default function InspeccionVisual() {
@@ -76,7 +89,7 @@ export default function InspeccionVisual() {
     try {
         await guardarInspeccion(
             jornadaId || 0,
-            tipo === 'inicio' ? 'SALIDA' : 'LLEGADA',
+            tipo === 'inicio' ? 'SALIDA (NOM-068)' : 'LLEGADA (NOM-068)',
             checklist,
             comentarios,
             firmaBase64
@@ -126,7 +139,7 @@ export default function InspeccionVisual() {
 
         <Text style={styles.instruction}>Marca los puntos que están en BUEN estado:</Text>
 
-        {/* GRID DE CHECKLIST */}
+        {/* GRID DE CHECKLIST ACTUALIZADO */}
         <View style={styles.grid}>
             {PUNTOS_REVISION.map((item) => {
                 const isChecked = checklist[item.id] === true;
