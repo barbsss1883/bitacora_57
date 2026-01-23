@@ -1,32 +1,41 @@
 {
   "project_info": {
     "project_number": "363075260432",
+    "firebase_url": "https://device-streaming-61499c4a-default-rtdb.firebaseio.com",
     "project_id": "device-streaming-61499c4a",
     "storage_bucket": "device-streaming-61499c4a.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:363075260432:android:ed460e5c23c7a4d5dbba95",
+        "mobilesdk_app_id": "1:363075260432:android:d55c64285f21fd92dbba95",
         "android_client_info": {
-          "package_name": "com.luisg0418.Bitacora57"
+          "package_name": "com.luisg0418.bitacora57"
         }
       },
       "oauth_client": [
         {
-          "client_id": "363075260432-f3s3kn5oecajmrnvcbtjojf9s3701aue.apps.googleusercontent.com",
+          "client_id": "363075260432-2e9iam2964mvldbqah6lgqq1nj3e6g72.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.luisg0418.Bitacora57",
-            "certificate_hash": "b6f5ec940ce67f9a4ad6f28130e5756a9bc6f3d3"
+            "package_name": "com.luisg0418.bitacora57",
+            "certificate_hash": "fb558f216ba5a1f329403a06640eb2a52b48d3aa"
           }
         },
         {
-          "client_id": "363075260432-rnpgeksdddrktn8816gvkdfg6oqqikdq.apps.googleusercontent.com",
+          "client_id": "363075260432-cc1jribde44btsk7dg9snns7u69su2ej.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.luisg0418.Bitacora57",
-            "certificate_hash": "f98cc93ef006c262dd16bb74917486f0b769a92a"
+            "package_name": "com.luisg0418.bitacora57",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "363075260432-g2j35lear94e2bt297vtuk6n5h4ldioe.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.luisg0418.bitacora57",
+            "certificate_hash": "e7bf14ee85ffe8862d74227bd495682c3c492172"
           }
         },
         {
@@ -36,7 +45,7 @@
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyD5yqF31xg4hiBZCqGnLZWH1KAgTZj-uA0"
+          "current_key": "AIzaSyBgomlmxZbcMJTw-YOtT6JyL6IKcPB3if4"
         }
       ],
       "services": {

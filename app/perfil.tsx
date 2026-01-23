@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker'; 
 import { doc, setDoc } from 'firebase/firestore'; 
 import { db_firestore } from '../src/services/firebaseConfig';
+import { GoogleSignin } from '@react-native-google-signin/google-signin'; 
 
 const COLORS = {
   bg: '#0f172a',
@@ -116,13 +117,35 @@ export default function Perfil() {
     } finally { setLoading(false); }
   };
 
+  // --- FUNCIÓN CORREGIDA ---
   const cerrarSesion = () => {
     Alert.alert("Cerrar Sesión", "¿Deseas salir?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Salir", style: "destructive", onPress: async () => {
-          await AsyncStorage.removeItem('USER_SESSION');
-          router.replace('/index');
-      }}
+      { 
+        text: "Salir", 
+        style: "destructive", 
+        onPress: async () => {
+          try {
+              // 1. Eliminar sesión local del dispositivo
+              await AsyncStorage.removeItem('USER_SESSION');
+              
+              // 2. Desconectar de Google para permitir cambiar de cuenta después
+              try {
+                await GoogleSignin.signOut();
+              } catch (googleError) {
+                // Si falla (ej. no estaba logueado con Google), solo lo ignoramos
+                console.log("No se pudo cerrar sesión de Google o no existía:", googleError);
+              }
+
+              // 3. Redirigir al Login (usando replace para borrar historial)
+              router.replace('/login');
+          } catch (error) {
+              console.error("Error fatal al salir:", error);
+              // En caso de emergencia, forzar ida al login
+              router.replace('/login');
+          }
+        }
+      }
     ]);
   };
 

@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StatusBar, ActivityIndicator, View } from 'react-native'; // Usamos StatusBar nativo
+import { StatusBar, ActivityIndicator, View } from 'react-native'; 
 import { initDatabase } from '../db/database';
 
 export default function Layout() {
@@ -15,8 +15,6 @@ export default function Layout() {
       })
       .catch(e => {
         console.error("Error fatal DB:", e);
-        // Aun si falla, dejamos pasar para ver errores en pantalla, 
-        // pero idealmente mostraríamos una alerta.
         setDbLista(true); 
       });
   }, []);
@@ -37,7 +35,8 @@ export default function Layout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="home" />
-        {/* Aquí la App detectará automáticamente inspeccionVisual si el archivo existe */}
+        {/* AGREGADO: Registramos perfil para evitar error de ruta */}
+        <Stack.Screen name="perfil" />
       </Stack>
     </>
   );
