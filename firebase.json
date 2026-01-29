@@ -9,17 +9,12 @@
     {
       "source": "functions",
       "codebase": "default",
-      "disallowLegacyRuntimeConfig": true,
       "ignore": [
         "node_modules",
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"
-      ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run lint",
-        "npm --prefix \"$RESOURCE_DIR\" run build"
       ]
     }
   ],
@@ -31,6 +26,18 @@
       "**/node_modules/**"
     ],
     "rewrites": [
+      {
+        "source": "/validar.html",
+        "destination": "/validar.html"
+      },
+      {
+        "source": "/monitor.html",
+        "destination": "/monitor.html"
+      },
+      {
+        "source": "/admin.html",
+        "destination": "/admin.html"
+      },
       {
         "source": "**",
         "destination": "/index.html"

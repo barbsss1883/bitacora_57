@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin | Bitácora 57</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-functions-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-slate-200 font-sans min-h-screen">
+
+    <nav class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center sticky top-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="bg-amber-500 w-10 h-10 rounded-lg flex items-center justify-center text-slate-900 font-bold text-xl shadow-lg shadow-amber-500/20">
+                <i class="fa-solid fa-user-shield"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-white tracking-wide text-lg">SUPER ADMIN</h1>
+                <p class="text-xs text-slate-500">Panel de Control Maestro</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="text-xs text-slate-400 hidden md:block" id="adminEmail">Verificando...</span>
+            <button onclick="logout()" class="bg-red-900/20 hover:bg-red-900/40 text-red-400 px-4 py-2 rounded-lg text-xs font-bold transition border border-red-900/50">
+                SALIR
+            </button>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-6">
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl flex items-center justify-between">
+                <div>
+                    <p class="text-slate-400 text-xs font-bold uppercase">Empresas Activas</p>
+                    <h2 class="text-3xl font-bold text-white mt-1" id="totalEmpresas">0</h2>
+                </div>
+                <i class="fa-solid fa-building text-3xl text-slate-700"></i>
+            </div>
+            <button onclick="abrirModal()" class="col-span-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-900 rounded-2xl shadow-xl shadow-orange-500/20 flex items-center justify-center gap-3 font-bold text-lg transition transform hover:scale-[1.01]">
+                <i class="fa-solid fa-plus-circle text-2xl"></i>
+                DAR DE ALTA NUEVA EMPRESA
+            </button>
+        </div>
+
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
+            <div class="p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
+                <h3 class="text-lg font-bold text-white"><i class="fa-solid fa-list mr-2 text-amber-500"></i> Directorio de Clientes</h3>
+                <div class="relative w-full md:w-64">
+                    <i class="fa-solid fa-search absolute left-3 top-3 text-slate-500 text-xs"></i>
+                    <input type="text" id="buscador" placeholder="Buscar por nombre o RFC..." class="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-8 pr-4 text-sm focus:outline-none focus:border-amber-500 text-white">
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-950 text-slate-400 text-xs uppercase tracking-wider">
+                            <th class="p-4 border-b border-slate-800">Empresa</th>
+                            <th class="p-4 border-b border-slate-800">Contacto / Email</th>
+                            <th class="p-4 border-b border-slate-800">RFC</th>
+                            <th class="p-4 border-b border-slate-800">Fecha Registro</th>
+                            <th class="p-4 border-b border-slate-800 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-body" class="text-sm divide-y divide-slate-800">
+                        <tr>
+                            <td colspan="5" class="p-8 text-center text-slate-500">
+                                <i class="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i><br>Cargando directorio...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="modalRegistro" class="fixed inset-0 bg-slate-950/90 z-50 hidden backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 w-full max-w-md rounded-2xl border border-slate-700 shadow-2xl relative animate-fade-in-up">
+            
+            <button onclick="cerrarModal()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+
+            <div class="p-8">
+                <div class="text-center mb-6">
+                    <div class="bg-amber-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/20">
+                        <i class="fa-solid fa-rocket text-2xl text-slate-900"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">Nueva Empresa</h2>
+                    <p class="text-slate-400 text-xs">Esto creará el acceso y enviará el correo.</p>
+                </div>
+
+                <form id="registerForm" class="space-y-4">
+                    <div>
+                        <label class="block text-slate-400 text-[10px] font-bold uppercase mb-1">Nombre Comercial</label>
+                        <input type="text" id="empresa" class="w-full bg-slate-950 border border-slate-700 rounded p-3 text-white focus:border-amber-500 outline-none" placeholder="TRANSPORTES EJEMPLO SA" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-slate-400 text-[10px] font-bold uppercase mb-1">Correo Admin</label>
+                        <input type="email" id="email" class="w-full bg-slate-950 border border-slate-700 rounded p-3 text-white focus:border-amber-500 outline-none" placeholder="gerente@empresa.com" required>
+                    </div>
+
+                    <div>
+                        <label class="block text-slate-400 text-[10px] font-bold uppercase mb-1">Contraseña Inicial</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="password" class="w-full bg-slate-950 border border-slate-700 rounded p-3 text-green-400 font-mono tracking-widest text-center focus:border-amber-500 outline-none" readonly required>
+                            <button type="button" onclick="generarPassword()" class="bg-slate-800 text-slate-300 px-4 rounded border border-slate-700 hover:bg-slate-700">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="statusMessage" class="hidden p-3 rounded text-center text-xs"></div>
+
+                    <button type="submit" id="btnSubmit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-lg transition shadow-lg shadow-amber-500/20 mt-2">
+                        REGISTRAR Y ENVIAR
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDdA_weQOkZ3LMAnehdAHUWi8moqHZEHns",
+            authDomain: "device-streaming-61499c4a.firebaseapp.com",
+            projectId: "device-streaming-61499c4a",
+            storageBucket: "device-streaming-61499c4a.firebasestorage.app",
+            messagingSenderId: "363075260432",
+            appId: "1:363075260432:web:d4028409282f0baedbba95"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const functions = firebase.functions();
+
+        // 1. SEGURIDAD: VERIFICAR LOGIN
+        auth.onAuthStateChanged(user => {
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+            // OPCIONAL: Aquí podrías verificar si el correo es el tuyo
+            // if(user.email !== 'soportebitacora57@gmail.com') { alert('No autorizado'); window.location.href = 'monitor.html'; }
+
+            document.getElementById('adminEmail').innerText = user.email;
+            cargarEmpresas();
+        });
+
+        // 2. CARGAR TABLA (LO QUE QUERÍAS VER)
+        function cargarEmpresas() {
+            db.collection("usuarios_web").orderBy("fecha_registro", "desc").onSnapshot((snapshot) => {
+                const tbody = document.getElementById("tabla-body");
+                tbody.innerHTML = "";
+                
+                document.getElementById('totalEmpresas').innerText = snapshot.size;
+
+                if(snapshot.empty) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-500">No hay empresas registradas.</td></tr>`;
+                    return;
+                }
+
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const fecha = data.fecha_registro ? new Date(data.fecha_registro).toLocaleDateString() : 'N/A';
+                    
+                    // Aquí es donde convertimos los datos en filas bonitas
+                    const tr = document.createElement("tr");
+                    tr.className = "hover:bg-slate-800/50 transition border-b border-slate-800/50";
+                    tr.innerHTML = `
+                        <td class="p-4">
+                            <div class="font-bold text-white text-base">${data.empresa || 'Sin Nombre'}</div>
+                            <div class="text-[10px] text-slate-500 font-mono">ID: ${doc.id.substring(0,8)}...</div>
+                        </td>
+                        <td class="p-4">
+                            <div class="text-slate-300">${data.email}</div>
+                            <div class="text-xs text-slate-500">${data.telefono || 'Sin tel'}</div>
+                        </td>
+                        <td class="p-4 font-mono text-slate-400">${data.rfc || '---'}</td>
+                        <td class="p-4 text-slate-500 text-xs">${fecha}</td>
+                        <td class="p-4 text-right">
+                            <button class="text-slate-500 hover:text-white transition" title="Ver detalles (Próximamente)">
+                                <i class="fa-solid fa-ellipsis-vertical"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+        }
+
+        // 3. LÓGICA DE REGISTRO (LA VIEJA CONFIABLE)
+        function generarPassword() {
+            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            let pass = "";
+            for (let i = 0; i < 8; i++) {
+                pass += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('password').value = pass;
+        }
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmit');
+            const status = document.getElementById('statusMessage');
+            
+            const empresa = document.getElementById('empresa').value.trim().toUpperCase();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Procesando...';
+            status.className = "hidden";
+
+            try {
+                // Llamamos a la Cloud Function que ya creamos
+                const crearUsuario = functions.httpsCallable('enviarBienvenidaB2B');
+                const respuesta = await crearUsuario({ email, password, empresa });
+
+                // Guardar datos extra en Firestore (Para que aparezca en la tabla)
+                // Nota: La Cloud Function crea el Auth, pero nosotros guardamos el perfil aquí para asegurar que tenga los campos correctos.
+                // Como no tenemos el UID aquí directamente (lo tiene el backend), confiamos en que el usuario iniciará sesión
+                // OJO: Idealmente la Cloud Function debería escribir en Firestore, pero para mantenerlo simple:
+                // Esperaremos a que el cliente se loguee o lo dejamos pendiente.
+                // MEJORA: Vamos a confiar en que la Function hizo su trabajo.
+                
+                status.className = "bg-green-900/50 text-green-200 border border-green-500 p-3 rounded text-center block mt-2";
+                status.innerHTML = `<i class="fa-solid fa-check"></i> Empresa registrada y correo enviado.`;
+                
+                setTimeout(() => {
+                    cerrarModal();
+                    document.getElementById('registerForm').reset();
+                    status.className = "hidden";
+                    btn.disabled = false;
+                    btn.innerHTML = "REGISTRAR Y ENVIAR";
+                }, 2000);
+
+            } catch (error) {
+                console.error(error);
+                status.className = "bg-red-900/50 text-red-200 border border-red-500 p-3 rounded text-center block mt-2";
+                status.innerText = "Error: " + error.message;
+                btn.disabled = false;
+                btn.innerHTML = "REGISTRAR Y ENVIAR";
+            }
+        });
+
+        // 4. UTILIDADES DE LA INTERFAZ
+        function abrirModal() {
+            generarPassword();
+            document.getElementById('modalRegistro').classList.remove('hidden');
+        }
+
+        function cerrarModal() {
+            document.getElementById('modalRegistro').classList.add('hidden');
+        }
+
+        // Buscador en tiempo real
+        document.getElementById('buscador').addEventListener('keyup', (e) => {
+            const texto = e.target.value.toLowerCase();
+            const filas = document.querySelectorAll('#tabla-body tr');
+            filas.forEach(fila => {
+                const contenido = fila.innerText.toLowerCase();
+                fila.style.display = contenido.includes(texto) ? '' : 'none';
+            });
+        });
+
+        function logout() {
+            auth.signOut().then(() => window.location.href = 'index.html');
+        }
+    </script>
+</body>
+</html>

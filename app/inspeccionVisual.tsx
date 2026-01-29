@@ -53,14 +53,13 @@ export default function InspeccionVisual() {
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    // Verificar si hay una jornada activa para asociar la inspección
     const checkJornada = async () => {
         const id = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
         if (id) {
             setJornadaId(Number(id));
         } else {
-            Alert.alert("Atención", "No tienes un viaje activo. Esta inspección quedará registrada sin viaje asociado (Pruebas).");
-            setJornadaId(0); // 0 indica sin viaje
+            // Si no hay jornada, asumimos id 0 (Pre-Viaje aislado)
+            setJornadaId(0); 
         }
     };
     checkJornada();
@@ -69,12 +68,11 @@ export default function InspeccionVisual() {
   const togglePunto = (id: string) => {
     setChecklist((prev: any) => ({
         ...prev,
-        [id]: !prev[id] // Invierte el valor (true/false)
+        [id]: !prev[id]
     }));
   };
 
   const solicitarFirma = () => {
-    // Validar que al menos haya revisado algo
     if (Object.keys(checklist).length === 0) {
         Alert.alert("Checklist Vacío", "Por favor marca los puntos revisados antes de firmar.");
         return;
@@ -87,6 +85,10 @@ export default function InspeccionVisual() {
     setGuardando(true);
 
     try {
+        const hoy = new Date().toISOString().split('T')[0]; // Fecha YYYY-MM-DD
+        const hora = new Date().toLocaleTimeString();
+
+        // 1. GUARDAR EN BD LOCAL (Historial)
         await guardarInspeccion(
             jornadaId || 0,
             tipo === 'inicio' ? 'SALIDA (NOM-068)' : 'LLEGADA (NOM-068)',
@@ -94,8 +96,27 @@ export default function InspeccionVisual() {
             comentarios,
             firmaBase64
         );
-        Alert.alert("¡Inspección Guardada!", "Tu revisión ha sido registrada correctamente.");
+
+        // -------------------------------------------------------------
+        // 2. 🔥 LAS LÍNEAS MÁGICAS (CONEXIÓN CON HOME Y PDF) 🔥
+        // -------------------------------------------------------------
+        
+        // A. Avisamos al Home que HOY ya se cumplió la inspección
+        await AsyncStorage.setItem('ULTIMA_INSPECCION', hoy);
+
+        // B. Guardamos los datos completos para que el PDF los pueda leer después
+        const datosParaPDF = {
+            fecha: hoy,
+            hora: hora,
+            ...checklist, // Guardamos items marcados (frenos: true, luces: true...)
+            comentarios: comentarios
+        };
+        await AsyncStorage.setItem(`INSPECCION_${hoy}`, JSON.stringify(datosParaPDF));
+        // -------------------------------------------------------------
+
+        Alert.alert("¡Inspección Guardada!", "Tu revisión ha sido registrada y validada para el día de hoy.");
         router.back();
+
     } catch (error) {
         console.error(error);
         Alert.alert("Error", "No se pudo guardar la inspección.");

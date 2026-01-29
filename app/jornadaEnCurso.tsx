@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, 
-  TextInput, StatusBar, Alert, ActivityIndicator, Platform
+  TextInput, StatusBar, Alert, ActivityIndicator, Image 
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -11,7 +11,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import MapaRuta from './mapaRuta'; 
 
 // SERVICIOS Y BD
-import { iniciarRastreoBackground, detenerRastreo, obtenerDireccion } from '../src/services/LocationService'; // <--- AGREGADO obtenerDireccion
+import { iniciarRastreoBackground, detenerRastreo, obtenerDireccion } from '../src/services/LocationService'; 
 import { iniciarNuevaJornada, finalizarJornada, insertarPausa, insertarIncidencia, obtenerDetalleJornada } from '../db/database';
 import FirmaDigital from '../src/components/FirmaDigital';
 import { generarPDF } from '../src/services/PdfGenerator'; 
@@ -25,7 +25,8 @@ const COLORS = {
   bg: '#0f172a', card: '#1e293b', primary: '#f59e0b', danger: '#7f1d1d',  
   text: '#f8fafc', subtext: '#94a3b8', success: '#10b981', 
   border: '#334155', warning: '#f97316', white: '#ffffff',
-  modalOverlay: 'rgba(15, 23, 42, 0.95)'
+  modalOverlay: 'rgba(15, 23, 42, 0.95)',
+  police: '#3b82f6' 
 };
 
 export default function JornadaEnCurso() {
@@ -44,6 +45,7 @@ export default function JornadaEnCurso() {
   const [modalPausa, setModalPausa] = useState(false);
   const [modalFirma, setModalFirma] = useState(false);
   const [modalIncidencia, setModalIncidencia] = useState(false);
+  const [modalQR, setModalQR] = useState(false);
   
   const [formulario, setFormulario] = useState({
     permisionario: '', domicilio: '', tipo_servicio: 'Carga General',
@@ -128,19 +130,27 @@ export default function JornadaEnCurso() {
         await AsyncStorage.setItem('CURRENT_JORNADA_VISUAL', JSON.stringify(datosVis));
         setJornadaId(nuevoId); setFechaInicio(ahora); setVisuales(datosVis);
         await iniciarRastreoBackground();
-        Alert.alert("¡Buen Viaje!", "Bitácora iniciada correctamente.");
+        
+        // --- SUBIDA INICIAL A FIREBASE ---
+        const datosInicioNube = {
+            ...datosParaGuardar,
+            id_interno: nuevoId,
+            empresa: formulario.permisionario,
+            estatus: 'en_curso',
+            fecha_inicio: ahora,
+            ultima_sincronizacion: serverTimestamp()
+        };
+        await setDoc(doc(db_firestore, "jornadas", String(nuevoId)), datosInicioNube);
+
+        Alert.alert("¡Buen Viaje!", "Bitácora iniciada y sincronizada.");
     } catch (error) { Alert.alert("Error BD", "No se pudo iniciar."); }
   };
 
   const pedirFirmaCierre = () => { 
-    if (enPausa) { 
-      Alert.alert("Pausa Activa", "Termina la pausa antes de finalizar."); 
-      return; 
-    } 
+    if (enPausa) { Alert.alert("Pausa Activa", "Termina la pausa antes de finalizar."); return; } 
     setModalFirma(true); 
   };
 
-  // --- MODIFICACIÓN: SUBIDA DE ARCHIVO ---
   const subirPdfFirebase = async (idLocal: number, uriLocal: string) => {
     try {
       const response = await fetch(uriLocal);
@@ -148,31 +158,86 @@ export default function JornadaEnCurso() {
       const storageRef = ref(storage, `reportes_v2/${formulario.licencia || 'anonimo'}/Viaje_${idLocal}.pdf`);
       await uploadBytes(storageRef, blob);
       const downloadURL = await getDownloadURL(storageRef);
-      // Sincronizamos con la colección rutas_maestras que usa el monitor
-      await updateDoc(doc(db_firestore, "rutas_maestras", String(idLocal)), { pdf_url: downloadURL });
+      await updateDoc(doc(db_firestore, "jornadas", String(idLocal)), { pdf_url: downloadURL });
     } catch (e) { console.error("Error subiendo PDF:", e); }
   };
 
-  // --- MODIFICACIÓN: SINCRONIZACIÓN FINAL ---
   const sincronizarYFinalizar = async (idLocal: number, firmaBase64: string, rutaJson: string | null) => {
     try {
       const dataFull = await obtenerDetalleJornada(idLocal);
       if (!dataFull.jornada) return;
       const { jornada, pausas, incidencias } = dataFull;
 
-      await setDoc(doc(db_firestore, "rutas_maestras", String(idLocal)), {
+      const hoy = new Date().toISOString().split('T')[0];
+      const inspeccionRaw = await AsyncStorage.getItem(`INSPECCION_${hoy}`);
+      const inspeccionData = inspeccionRaw ? JSON.parse(inspeccionRaw) : null;
+
+      let puntosIntermedios = [];
+      if (pausas && pausas.length > 0) {
+          puntosIntermedios = pausas.map((p: any) => ({
+              tipo: 'PAUSA', hora: p.inicio, ubicacion: p.direccion || 'Ubicación registrada', detalle: p.motivo, lat: 0, lng: 0 
+          }));
+      }
+
+      if (rutaJson) {
+          try {
+              const coordenadas = JSON.parse(rutaJson);
+              if (Array.isArray(coordenadas) && coordenadas.length > 0) {
+                  const paso = Math.max(1, Math.floor(coordenadas.length / 10));
+                  for (let i = 0; i < coordenadas.length; i += paso) {
+                      const pt = coordenadas[i];
+                      if(pt && pt.latitude && pt.longitude) {
+                          // 🔥 VALIDACIÓN DE FECHA BLINDADA
+                          let horaSafe = new Date().toISOString(); 
+                          if (pt.timestamp) {
+                             const t = new Date(pt.timestamp);
+                             if (!isNaN(t.getTime())) { 
+                                 horaSafe = t.toISOString();
+                             }
+                          }
+
+                          puntosIntermedios.push({
+                              tipo: 'RASTREO',
+                              hora: horaSafe,
+                              ubicacion: `${pt.latitude.toFixed(5)}, ${pt.longitude.toFixed(5)}`,
+                              lat: pt.latitude, 
+                              lng: pt.longitude,
+                              detalle: 'En ruta'
+                          });
+                      }
+                  }
+              }
+          } catch (e) { console.log("Error procesando ruta GPS", e); }
+      }
+
+      const datosParaNube = {
         ...jornada, 
-        pausas, 
-        incidencias, 
+        id_interno: idLocal,
+        empresa: jornada.permisionario,
+        estatus: 'finalizado',
+        pausas: pausas || [], 
+        incidencias: incidencias || [], 
+        inspeccion: inspeccionData || "No registrada", 
+        puntos_rastreo: puntosIntermedios,
         ruta_geojson: rutaJson, 
         ultima_sincronizacion: serverTimestamp(), 
         servidor_verificado: true,
         firma: firmaBase64
-      });
+      };
+
+      await setDoc(doc(db_firestore, "jornadas", String(idLocal)), datosParaNube);
       
-      const uriPdf = await generarPDF({...jornada, firma: firmaBase64}, pausas, incidencias, []); 
+      const uriPdf = await generarPDF(
+          {...jornada, firma: firmaBase64}, pausas, incidencias, inspeccionData, puntosIntermedios    
+      ); 
+
       if (uriPdf) { await subirPdfFirebase(idLocal, uriPdf); }
-    } catch (e) { console.error("Error sincronizando:", e); }
+      Alert.alert("Éxito", "Viaje finalizado y visible en el monitor.");
+
+    } catch (e: any) { 
+        console.error("Error sincronizando:", e); 
+        Alert.alert("Aviso", "Datos guardados en celular, pero hubo error subiendo a la nube: " + e.message);
+    }
   };
 
   const confirmarCierreConFirma = async (firmaBase64: string) => {
@@ -189,78 +254,52 @@ export default function JornadaEnCurso() {
         await AsyncStorage.multiRemove([
           'CURRENT_JORNADA_ID', 'CURRENT_JORNADA_START', 
           'CURRENT_JORNADA_VISUAL', 'CURRENT_PAUSA_START', 'CURRENT_PAUSA_TYPE',
-          'CURRENT_PAUSA_ADDRESS' // Limpiamos dirección temporal
+          'CURRENT_PAUSA_ADDRESS'
         ]);
         router.replace('/home');
-    } catch (e) { 
-      console.error(e);
-      Alert.alert("Error", "Error al finalizar."); 
-    } finally { 
-      setCargando(false); 
-    }
+    } catch (e) { console.error(e); Alert.alert("Error", "Error al finalizar."); } finally { setCargando(false); }
   };
 
   const activarPausa = async (motivo: string) => {
     setModalPausa(false); 
-    
-    // Obtener dirección al inicio de la pausa
     const direccion = await obtenerDireccion();
-    
     const ahora = new Date().toISOString();
     setEnPausa(true); 
     setInicioPausa(ahora); 
     setTipoPausaActual(motivo);
-    
     await AsyncStorage.setItem('CURRENT_PAUSA_START', ahora); 
     await AsyncStorage.setItem('CURRENT_PAUSA_TYPE', motivo);
-    await AsyncStorage.setItem('CURRENT_PAUSA_ADDRESS', direccion); // Guardamos dirección
+    await AsyncStorage.setItem('CURRENT_PAUSA_ADDRESS', direccion); 
   };
 
   const terminarPausa = async () => {
     if (!inicioPausa || !jornadaId) return;
-    
     const fin = new Date(); 
     const inicio = new Date(inicioPausa);
     const duracion = (fin.getTime() - inicio.getTime()) / 60000;
-    
-    // Recuperamos la dirección guardada
     const direccionGuardada = await AsyncStorage.getItem('CURRENT_PAUSA_ADDRESS') || '';
 
-    await insertarPausa(
-      jornadaId, 
-      tipoPausaActual || 'Varios', 
-      inicio.toISOString(), 
-      fin.toISOString(), 
-      duracion,
-      direccionGuardada // Nuevo parámetro
-    );
+    await insertarPausa(jornadaId, tipoPausaActual || 'Varios', inicio.toISOString(), fin.toISOString(), duracion, direccionGuardada);
 
     await AsyncStorage.removeItem('CURRENT_PAUSA_START'); 
     await AsyncStorage.removeItem('CURRENT_PAUSA_TYPE');
     await AsyncStorage.removeItem('CURRENT_PAUSA_ADDRESS');
-
-    setEnPausa(false); 
-    setInicioPausa(null); 
-    setTipoPausaActual(null);
+    setEnPausa(false); setInicioPausa(null); setTipoPausaActual(null);
   };
 
   const reportarIncidencia = async () => {
     if (!jornadaId) return; 
     setModalIncidencia(false);
     try { 
-      // Obtener dirección del incidente
       const direccion = await obtenerDireccion();
-      await insertarIncidencia(
-        jornadaId, 
-        "Reporte Manual", 
-        descIncidencia, 
-        null, 
-        direccion // Nuevo parámetro
-      ); 
+      await insertarIncidencia(jornadaId, "Reporte Manual", descIncidencia, null, direccion); 
       setDescIncidencia(''); 
       Alert.alert("Reportado", "Incidencia registrada."); 
     } catch (e) { Alert.alert("Error", "No se guardó."); }
   };
+
+  // URL PARA EL QR (APUNTA A TU DOMINIO OFICIAL)
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`https://bitacora57.com/validar.html?id=${jornadaId}`)}`;
 
   if (cargando) return <View style={[styles.container, {justifyContent:'center'}]}><ActivityIndicator size="large" color={COLORS.primary}/></View>;
 
@@ -268,24 +307,40 @@ export default function JornadaEnCurso() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+        
         <View style={styles.timerCardNew}>
           <View style={styles.timerHeader}>
             <View style={{flexDirection:'row', alignItems:'center'}}>
                 <MaterialCommunityIcons name="timer-outline" size={18} color={COLORS.subtext} style={{marginRight: 5}} />
                 <Text style={styles.cardLabelNew}>TIEMPO DE MANEJO</Text>
             </View>
-            <View style={{flexDirection:'column', alignItems:'flex-end', gap: 6}}>
-                <View style={[styles.statusBadgeNew, {backgroundColor: enPausa ? COLORS.warning : COLORS.success}]}>
-                    <Text style={styles.statusTextNew}>{enPausa ? "EN PAUSA" : "EN RUTA"}</Text>
-                </View>
+            
+            <View style={{flexDirection:'row', alignItems:'center', gap: 8}}>
                 {jornadaId && !enPausa && (
-                  <TouchableOpacity style={styles.btnReportarNew} onPress={() => setModalIncidencia(true)}>
-                    <MaterialCommunityIcons name="alert" size={16} color={COLORS.warning} />
-                    <Text style={styles.txtReportarNew}>Reportar</Text>
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity style={styles.btnReportarNew} onPress={() => setModalIncidencia(true)}>
+                      <MaterialCommunityIcons name="alert" size={16} color={COLORS.warning} />
+                      <Text style={styles.txtReportarNew}>Reportar</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={[styles.btnReportarNew, {borderColor: COLORS.police, backgroundColor: 'rgba(59, 130, 246, 0.1)'}]} 
+                        onPress={() => setModalQR(true)}
+                    >
+                      <MaterialCommunityIcons name="qrcode-scan" size={16} color={COLORS.police} />
+                      <Text style={[styles.txtReportarNew, {color: COLORS.police}]}>QR Oficial</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
             </View>
           </View>
+          
+          <View style={{flexDirection:'column', alignItems:'flex-end', marginBottom:10}}>
+                <View style={[styles.statusBadgeNew, {backgroundColor: enPausa ? COLORS.warning : COLORS.success}]}>
+                    <Text style={styles.statusTextNew}>{enPausa ? "EN PAUSA" : "EN RUTA"}</Text>
+                </View>
+          </View>
+
           <View style={styles.mainTimerContainer}>
             {enPausa ? (
                 <View style={{alignItems:'center'}}>
@@ -307,6 +362,7 @@ export default function JornadaEnCurso() {
              <View style={{flexDirection:'row', alignItems:'baseline'}}><Text style={styles.footerTimerText}>{tiempoTotal}</Text><Text style={styles.footerSubTimerText}> / 14:00:00</Text></View>
           </View>
         </View>
+
         <View style={styles.mapContainer}><MapaRuta key={jornadaId ? `viaje-${jornadaId}` : 'sin-viaje'} /></View>
       </ScrollView>
 
@@ -404,6 +460,33 @@ export default function JornadaEnCurso() {
           </View>
       </Modal>
 
+      {/* MODAL QR OFICIAL */}
+      <Modal visible={modalQR} transparent animationType="fade">
+          <View style={[styles.modalOverlay, {justifyContent:'center', alignItems:'center'}]}>
+              <View style={{backgroundColor: 'white', padding: 25, borderRadius: 20, alignItems:'center', width:'85%'}}>
+                  <Text style={{fontSize:18, fontWeight:'bold', marginBottom:10, color:'#000'}}>INSPECCIÓN OFICIAL</Text>
+                  <Text style={{fontSize:12, color:'#555', marginBottom:20, textAlign:'center'}}>
+                      Presente este código a la autoridad para validar la bitácora digital (NOM-087-SCT).
+                  </Text>
+                  
+                  <Image 
+                    source={{uri: qrUrl}} 
+                    style={{width: 250, height: 250, marginBottom: 20}} 
+                    resizeMode="contain"
+                  />
+                  
+                  <Text style={{fontSize:10, color:'#999', marginBottom:20}}>ID VIAJE: {jornadaId}</Text>
+
+                  <TouchableOpacity 
+                    onPress={()=>setModalQR(false)} 
+                    style={{backgroundColor: COLORS.primary, paddingVertical:12, paddingHorizontal:30, borderRadius:25}}
+                  >
+                      <Text style={{fontWeight:'bold', color:'white'}}>CERRAR</Text>
+                  </TouchableOpacity>
+              </View>
+          </View>
+      </Modal>
+
       <Modal visible={modalFirma}>
           <View style={{flex:1, backgroundColor: COLORS.bg}}><FirmaDigital onOK={confirmarCierreConFirma} onCancel={() => setModalFirma(false)} /></View>
       </Modal>
@@ -411,11 +494,12 @@ export default function JornadaEnCurso() {
   );
 }
 
+// 🔥 AQUÍ ESTÁ LA MAGIA: EL COMPONENTE ESTÁ AFUERA
 const InputDark = ({ label, val, set, placeholder, flex, multiline }: any) => (
-  <View style={[{ marginBottom: 10 }, flex && { flex: 1, marginRight:5 }]}>
-    <Text style={{color:COLORS.subtext, fontSize:12, marginBottom:4}}>{label}</Text>
-    <TextInput style={[styles.input, multiline && {height:80}]} value={val} onChangeText={set} placeholder={placeholder} placeholderTextColor="#555" multiline={multiline} />
-  </View>
+    <View style={[{ marginBottom: 10 }, flex && { flex: 1, marginRight:5 }]}>
+      <Text style={{color:COLORS.subtext, fontSize:12, marginBottom:4}}>{label}</Text>
+      <TextInput style={[styles.input, multiline && {height:80}]} value={val} onChangeText={set} placeholder={placeholder} placeholderTextColor="#555" multiline={multiline} />
+    </View>
 );
 
 const styles = StyleSheet.create({

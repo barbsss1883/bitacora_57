@@ -2,15 +2,15 @@ import * as SQLite from 'expo-sqlite';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import * as Crypto from 'expo-crypto'; // Importación real para el Sello
+import * as Crypto from 'expo-crypto'; 
 
 let cachedDb: SQLite.SQLiteDatabase | null = null;
 
+// --- FUNCIÓN DE CONEXIÓN PRINCIPAL ---
 const getDB = async () => {
   if (cachedDb) return cachedDb;
   try {
     cachedDb = await SQLite.openDatabaseAsync('bitacora.db');
-    // Activación de modo WAL para evitar que la BD se trabe con el GPS activo
     await cachedDb.execAsync(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
@@ -23,7 +23,7 @@ const getDB = async () => {
 };
 
 // ==========================================
-// 1. INICIALIZAR LA BASE DE DATOS (Real con Sello Digital)
+// 1. INICIALIZAR LA BASE DE DATOS
 // ==========================================
 export const initDatabase = async () => {
   try {
@@ -114,18 +114,16 @@ export const initDatabase = async () => {
       );
     `);
 
-    // Migración automática por si las columnas nuevas no existen en el backup
     try {
       await db.execAsync(`ALTER TABLE jornadas ADD COLUMN km_totales REAL DEFAULT 0;`);
       await db.execAsync(`ALTER TABLE jornadas ADD COLUMN sello_digital TEXT;`);
-      // NUEVAS COLUMNAS PARA GEOCODIFICACIÓN
       await db.execAsync(`ALTER TABLE pausas ADD COLUMN direccion TEXT;`);
       await db.execAsync(`ALTER TABLE incidencias ADD COLUMN direccion TEXT;`);
     } catch (e) {
-      // Columnas ya existen, ignoramos error
+      // Ignoramos si ya existen
     }
 
-    console.log('BD Inicializada correctamente con soporte de Certificación y Direcciones');
+    console.log('BD Inicializada correctamente');
     return true;
   } catch (error) {
     console.error('Error inicializando BD:', error);
@@ -135,7 +133,7 @@ export const initDatabase = async () => {
 };
 
 // ==========================================
-// SEGURIDAD: GENERACIÓN DE SELLO DIGITAL REAL
+// SEGURIDAD: GENERACIÓN DE SELLO DIGITAL
 // ==========================================
 export const generarSelloDigital = async (id: number, fechaFin: string, operador: string, km: number) => {
   try {
@@ -144,7 +142,7 @@ export const generarSelloDigital = async (id: number, fechaFin: string, operador
       Crypto.CryptoDigestAlgorithm.SHA256,
       dataString
     );
-    return hash.substring(0, 16).toUpperCase(); // Sello de 16 caracteres para QR
+    return hash.substring(0, 16).toUpperCase(); 
   } catch (e) {
     console.error('Error generando sello:', e);
     return "ERROR_HASH";
@@ -152,7 +150,7 @@ export const generarSelloDigital = async (id: number, fechaFin: string, operador
 };
 
 // ==========================================
-// FUNCIONES DE JORNADA (Modificadas para Certificación)
+// FUNCIONES DE JORNADA
 // ==========================================
 
 export const iniciarNuevaJornada = async (datos: any) => {
@@ -186,11 +184,9 @@ export const finalizarJornada = async (id: number, firma: string, rutaGeoJson: s
     const db = await getDB();
     const fin = new Date().toISOString();
     
-    // Obtener datos actuales para el sello
     const jornada: any = await db.getFirstAsync('SELECT operador FROM jornadas WHERE id = ?', [id]);
     const operador = jornada?.operador || "Anonimo";
     
-    // Generar sello real
     const sello = await generarSelloDigital(id, fin, operador, kmTotales);
 
     await db.runAsync(
@@ -210,8 +206,6 @@ export const finalizarJornada = async (id: number, firma: string, rutaGeoJson: s
     return false;
   }
 };
-
-// --- Mantenimiento de tus funciones originales intactas ---
 
 export const loginUsuario = async (email: string, pass: string) => {
   try {
@@ -235,20 +229,44 @@ export const registrarUsuario = async (nombre: string, email: string, pass: stri
   }
 };
 
+// --- FUNCIÓN DE LOGIN GOOGLE MEJORADA Y ROBUSTA ---
 export const loginConGoogle = async (googleUser: any) => {
   try {
+    console.log("RECIBIDO EN DB:", JSON.stringify(googleUser));
+    
     const db = await getDB();
-    const { email, name, photo } = googleUser;
-    if (!email) return null;
-    const existing = await db.getFirstAsync('SELECT * FROM usuarios WHERE email = ?', [email]);
-    if (existing) return existing;
-    const res = await db.runAsync('INSERT INTO usuarios (nombre, email, foto, password) VALUES (?, ?, ?, ?)', [name || 'Usuario', email, photo || '', 'google_oauth']);
+    
+    // Detectamos si los datos vienen anidados en 'user' o planos
+    const datosUsuario = googleUser.user || googleUser; 
+
+    const email = datosUsuario.email;
+    const name = datosUsuario.name || datosUsuario.givenName || 'Usuario Google';
+    const photo = datosUsuario.photo || datosUsuario.photoUrl || '';
+
+    if (!email) {
+        console.error("❌ Error: No se encontró el email en el objeto googleUser");
+        return null;
+    }
+
+    const existing: any = await db.getFirstAsync('SELECT * FROM usuarios WHERE email = ?', [email]);
+    
+    if (existing) {
+        return existing;
+    }
+
+    const res = await db.runAsync(
+        'INSERT INTO usuarios (nombre, email, foto, password) VALUES (?, ?, ?, ?)', 
+        [name, email, photo, 'google_oauth']
+    );
+    
     return { id: res.lastInsertRowId, nombre: name, email, foto: photo };
+
   } catch (e) {
-    console.error('loginConGoogle error:', e);
+    console.error('❌ CRASH en loginConGoogle:', e);
     return null;
   }
 };
+// ----------------------------------------------------
 
 export const obtenerDocumentosUsuario = async (usuarioId: number) => {
   try {
@@ -309,7 +327,6 @@ export const insertarPuntoGPS = async (jornadaId: number, lat: number, long: num
   }
 };
 
-// MODIFICADA: Ahora acepta dirección opcional
 export const insertarPausa = async (jornadaId: number, motivo: string, inicio: string, fin: string, duracion: number, direccion: string = '') => {
   try {
     const db = await getDB();
@@ -324,7 +341,6 @@ export const insertarPausa = async (jornadaId: number, motivo: string, inicio: s
   }
 };
 
-// MODIFICADA: Ahora acepta dirección opcional
 export const insertarIncidencia = async (jornadaId: number, tipo: string, descripcion: string, fotoUri: string | null, direccion: string = '') => {
   try {
     const db = await getDB();
@@ -402,5 +418,60 @@ export const obtenerEstadisticasUsuario = async (usuarioId?: number) => {
   } catch (e) {
     console.error('obtenerEstadisticasUsuario error:', e);
     return { viajes: 0, km: 0 };
+  }
+};
+
+export const vincularInspeccionAViaje = async (nuevoJornadaId: number) => {
+  try {
+    const db = await getDB();
+
+    const hoyStart = new Date();
+    hoyStart.setHours(0, 0, 0, 0);
+    const hoyEnd = new Date();
+    hoyEnd.setHours(23, 59, 59, 999);
+
+    const result: any = await db.runAsync(
+      `UPDATE inspecciones 
+       SET jornada_id = ? 
+       WHERE jornada_id = 0 
+       AND fecha >= ? AND fecha <= ?`,
+      [nuevoJornadaId, hoyStart.toISOString(), hoyEnd.toISOString()]
+    );
+
+    console.log(`Inspecciones vinculadas al viaje ${nuevoJornadaId}: ${result.changes}`);
+    return result.changes > 0;
+  } catch (e) {
+    console.error('Error vincularInspeccionAViaje:', e);
+    return false;
+  }
+};
+
+// ==========================================
+// NUEVAS FUNCIONES CORREGIDAS PARA HISTORIAL
+// ==========================================
+
+export const obtenerJornadas = async () => {
+  try {
+    const db = await getDB();
+    const resultados = await db.getAllAsync('SELECT * FROM jornadas ORDER BY id DESC');
+    return resultados;
+  } catch (error) {
+    console.error("Error al obtener jornadas:", error);
+    return [];
+  }
+};
+
+export const eliminarViaje = async (id: number) => {
+  try {
+    const db = await getDB();
+    // Usamos runAsync y el nombre correcto de columna 'jornada_id'
+    await db.runAsync('DELETE FROM jornadas WHERE id = ?', [id]);
+    await db.runAsync('DELETE FROM pausas WHERE jornada_id = ?', [id]);
+    await db.runAsync('DELETE FROM incidencias WHERE jornada_id = ?', [id]);
+    await db.runAsync('DELETE FROM inspecciones WHERE jornada_id = ?', [id]);
+    await db.runAsync('DELETE FROM puntos_gps WHERE jornada_id = ?', [id]);
+    console.log(`Viaje ${id} eliminado correctamente.`);
+  } catch (error) {
+    console.error("Error al eliminar viaje:", error);
   }
 };
