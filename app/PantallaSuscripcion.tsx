@@ -21,7 +21,7 @@ const COLORS = {
 };
 
 // 🔥 TU LLAVE DE REVENUECAT LISTA
-const API_KEY = 'test_kBGHpTgrAUXILeRLXCgzsKCtbmc'; 
+const API_KEY = 'goog_DzTkRNvkOzigskDvblAaBCgMPQl'; 
 
 export default function PantallaSuscripcion() {
   const router = useRouter();

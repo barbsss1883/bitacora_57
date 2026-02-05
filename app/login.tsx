@@ -20,7 +20,7 @@ const COLORS = {
 };
 
 GoogleSignin.configure({
-  webClientId: "363075260432-73vjlu0ukn1u59sjgf5dpi1mkunda880.apps.googleusercontent.com",
+  webClientId: "363075260432-v489o093cfoicld54u29be3p3p6l176a.apps.googleusercontent.com",
   offlineAccess: true
 });
 
