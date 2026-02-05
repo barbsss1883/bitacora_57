@@ -14,7 +14,7 @@
       "backgroundColor": "#0f172a"
     },
     "android": {
-      "package": "com.luisg0418.Bitacora57",
+      "package": "com.luisg0418.bitacora57",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -65,7 +65,7 @@
       }
     },
     "ios": {
-      "bundleIdentifier": "com.luisg0418.Bitacora57"
+      "bundleIdentifier": "com.luisg0418.bitacora57"
     }
   }
 }

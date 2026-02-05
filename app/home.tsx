@@ -167,6 +167,12 @@ export default function Home() {
     }
   };
 
+  // --- FUNCIÓN PARA IR A SUSCRIPCIONES ---
+  const irAPremium = () => {
+      // Asegúrate de que el nombre del archivo coincida con la ruta
+      router.push('/PantallaSuscripcion'); 
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
@@ -183,9 +189,17 @@ export default function Home() {
                 <Text style={styles.userName}>{usuario?.nombre || 'Operador'}</Text>
             </View>
         </View>
-        <TouchableOpacity onPress={cerrarSesion}>
-            <MaterialCommunityIcons name="logout" size={24} color={COLORS.subtext} />
-        </TouchableOpacity>
+
+        <View style={{flexDirection:'row', alignItems:'center', gap: 15}}>
+            {/* 👑 BOTÓN CORONA EN EL HEADER (Acceso Rápido) */}
+            <TouchableOpacity onPress={irAPremium}>
+                <MaterialCommunityIcons name="crown" size={26} color={COLORS.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={cerrarSesion}>
+                <MaterialCommunityIcons name="logout" size={24} color={COLORS.subtext} />
+            </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{padding: 20, paddingBottom: 50}}>
@@ -267,6 +281,15 @@ export default function Home() {
                 </View>
                 <Text style={styles.cardTitle}>Mi Perfil</Text>
                 <Text style={styles.cardSub}>Ajustes de cuenta</Text>
+            </TouchableOpacity>
+
+            {/* 6. 🔥 HAZTE PRO (NUEVO BOTÓN INTEGRADO AL GRID) */}
+            <TouchableOpacity style={styles.card} onPress={irAPremium}>
+                <View style={[styles.iconBox, {backgroundColor: 'rgba(255, 215, 0, 0.15)'}]}>
+                    <MaterialCommunityIcons name="crown" size={32} color={COLORS.primary} />
+                </View>
+                <Text style={styles.cardTitle}>Hazte PRO</Text>
+                <Text style={styles.cardSub}>Sin límites</Text>
             </TouchableOpacity>
         </View>
 

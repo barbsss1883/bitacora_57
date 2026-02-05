@@ -79,6 +79,18 @@ export default function JornadaEnCurso() {
     return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
   };
 
+  // FUNCIÓN AUXILIAR PARA CALCULAR DISTANCIA (Haversine)
+  const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Radio de la tierra en km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
   const cargarEstado = async () => {
     try {
       const id = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
@@ -159,6 +171,12 @@ export default function JornadaEnCurso() {
       await uploadBytes(storageRef, blob);
       const downloadURL = await getDownloadURL(storageRef);
       await updateDoc(doc(db_firestore, "jornadas", String(idLocal)), { pdf_url: downloadURL });
+      
+      // TAMBIÉN ACTUALIZAMOS EN RUTAS MAESTRAS LA URL DEL PDF
+      try {
+        await updateDoc(doc(db_firestore, "rutas_maestras", String(idLocal)), { pdf_url: downloadURL });
+      } catch (e) { console.log("No existe ruta maestra aún para actualizar PDF"); }
+
     } catch (e) { console.error("Error subiendo PDF:", e); }
   };
 
@@ -173,6 +191,8 @@ export default function JornadaEnCurso() {
       const inspeccionData = inspeccionRaw ? JSON.parse(inspeccionRaw) : null;
 
       let puntosIntermedios = [];
+      let distanciaCalculada = 0; // Variable para acumular KM
+
       if (pausas && pausas.length > 0) {
           puntosIntermedios = pausas.map((p: any) => ({
               tipo: 'PAUSA', hora: p.inicio, ubicacion: p.direccion || 'Ubicación registrada', detalle: p.motivo, lat: 0, lng: 0 
@@ -184,10 +204,19 @@ export default function JornadaEnCurso() {
               const coordenadas = JSON.parse(rutaJson);
               if (Array.isArray(coordenadas) && coordenadas.length > 0) {
                   const paso = Math.max(1, Math.floor(coordenadas.length / 10));
+                  
+                  // CALCULAR DISTANCIA TOTAL RECORRIDA
+                  for (let i = 0; i < coordenadas.length - 1; i++) {
+                      const p1 = coordenadas[i];
+                      const p2 = coordenadas[i+1];
+                      if(p1.latitude && p1.longitude && p2.latitude && p2.longitude){
+                          distanciaCalculada += getDistanceFromLatLonInKm(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
+                      }
+                  }
+
                   for (let i = 0; i < coordenadas.length; i += paso) {
                       const pt = coordenadas[i];
                       if(pt && pt.latitude && pt.longitude) {
-                          // 🔥 VALIDACIÓN DE FECHA BLINDADA
                           let horaSafe = new Date().toISOString(); 
                           if (pt.timestamp) {
                              const t = new Date(pt.timestamp);
@@ -210,25 +239,45 @@ export default function JornadaEnCurso() {
           } catch (e) { console.log("Error procesando ruta GPS", e); }
       }
 
-      const datosParaNube = {
-        ...jornada, 
-        id_interno: idLocal,
-        empresa: jornada.permisionario,
-        estatus: 'finalizado',
-        pausas: pausas || [], 
-        incidencias: incidencias || [], 
-        inspeccion: inspeccionData || "No registrada", 
-        puntos_rastreo: puntosIntermedios,
-        ruta_geojson: rutaJson, 
-        ultima_sincronizacion: serverTimestamp(), 
-        servidor_verificado: true,
-        firma: firmaBase64
+      // 1. GUARDADO EN COLECCIÓN 'JORNADAS' (Detalle completo)
+
+      await setDoc(doc(db_firestore, "jornadas", String(idLocal)), {
+          ...jornada,
+          id_interno: idLocal,
+          empresa: jornada.permisionario,
+          estatus: 'finalizado',
+          pausas: pausas || [],
+          incidencias: incidencias || [],
+          inspeccion: inspeccionData || "No registrada",
+          puntos_rastreo: puntosIntermedios,
+          ruta_geojson: rutaJson,
+          ultima_sincronizacion: serverTimestamp(),
+          servidor_verificado: true,
+          firma: firmaBase64,
+          km_calculados: distanciaCalculada.toFixed(2) // Guardamos también aquí por si acaso
+        });
+      
+      // 2. GUARDADO EN COLECCIÓN 'RUTAS_MAESTRAS' (Resumen para administradores)
+      // Esta es la parte que faltaba para que se viera en el dashboard general
+      const datosMaestros = {
+          id_interno: idLocal,
+          empresa: jornada.permisionario,
+          unidad: jornada.unidad,
+          operador: jornada.operador,
+          origen: jornada.origen,
+          destino: jornada.destino,
+          fecha_inicio: jornada.fecha_inicio,
+          fecha_fin: serverTimestamp(),
+          km_totales: parseFloat(distanciaCalculada.toFixed(2)), // Aquí va el valor real, no 0
+          estatus: 'finalizado',
+          ruta: rutaJson, // Usamos la misma cadena JSON para que el mapa maestro la lea
+          incidencias_count: incidencias ? incidencias.length : 0
       };
 
-      await setDoc(doc(db_firestore, "jornadas", String(idLocal)), datosParaNube);
-      
+      await setDoc(doc(db_firestore, "rutas_maestras", String(idLocal)), datosMaestros);
+
       const uriPdf = await generarPDF(
-          {...jornada, firma: firmaBase64}, pausas, incidencias, inspeccionData, puntosIntermedios    
+          {...jornada, firma: firmaBase64, km_totales: distanciaCalculada.toFixed(2)}, pausas, incidencias, inspeccionData, puntosIntermedios    
       ); 
 
       if (uriPdf) { await subirPdfFirebase(idLocal, uriPdf); }
@@ -299,7 +348,7 @@ export default function JornadaEnCurso() {
   };
 
   // URL PARA EL QR (APUNTA A TU DOMINIO OFICIAL)
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`https://bitacora57.com/validar.html?id=${jornadaId}`)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`https://device-streaming-61499c4a.web.app/validar.html?id=${jornadaId}`)}`;
 
   if (cargando) return <View style={[styles.container, {justifyContent:'center'}]}><ActivityIndicator size="large" color={COLORS.primary}/></View>;
 

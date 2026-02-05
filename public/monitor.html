@@ -26,11 +26,30 @@
         #map { background: #0f172a; z-index: 1; }
         .leaflet-popup-content-wrapper { background: #1e293b; color: white; border: 1px solid #475569; }
         .leaflet-popup-tip { background: #1e293b; }
+        
+        /* DIAGNÓSTICO */
+        #debug-panel {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 300px;
+            max-height: 200px;
+            background: rgba(0,0,0,0.8);
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 10px;
+            z-index: 1000;
+            overflow-y: auto;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="flex h-screen text-slate-200 font-sans">
 
-    <aside class="w-80 bg-slate-900 border-r border-slate-700 flex flex-col z-20 shadow-2xl">
+    <aside class="w-80 bg-slate-900 border-r border-slate-700 flex flex-col z-20 shadow-2xl transition-all duration-300" id="sidebar">
         <div class="p-5 border-b border-slate-700 bg-slate-950">
             <h1 class="text-xl font-bold text-white tracking-wide">MONITOR <span class="text-amber-500">B2B</span></h1>
             <p class="text-xs text-slate-400 mt-1 uppercase truncate" id="lblEmpresa">
@@ -44,17 +63,14 @@
                 <input type="text" id="buscador" placeholder="Buscar unidad..." 
                     class="w-full bg-slate-800 text-sm text-white rounded-lg pl-9 pr-3 py-2.5 border border-slate-700 focus:outline-none focus:border-amber-500 transition-colors">
             </div>
-
             <a href="historial.html" class="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-700 text-white py-2 rounded-lg border border-slate-700 transition-colors text-sm font-bold shadow-lg">
                 <i class="fa-solid fa-clock-rotate-left text-amber-500"></i>
-                VER HISTORIAL DE VIAJES
+                VER HISTORIAL
             </a>
         </div>
 
         <div class="flex-1 overflow-y-auto px-2 pb-4 space-y-2" id="lista-unidades">
-            <div class="text-center mt-10 text-slate-500 text-xs">
-                Esperando señal satelital...
-            </div>
+            <div class="text-center mt-10 text-slate-500 text-xs">Esperando señal satelital...</div>
         </div>
 
         <div class="p-4 border-t border-slate-700 bg-slate-800 text-center space-y-2">
@@ -80,17 +96,8 @@
                 </div>
             </div>
         </div>
-            
-        <div id="alertaSos" class="hidden absolute top-4 right-4 z-[400] glass-panel px-6 py-3 rounded-lg border border-red-600 bg-red-900/90 shadow-2xl pointer-events-auto parpadeo flex items-center gap-4 max-w-sm">
-            <div class="bg-red-600/20 p-3 rounded-full">
-                <i class="fa-solid fa-triangle-exclamation text-red-500 text-2xl"></i>
-            </div>
-            <div>
-                <h3 class="font-bold text-white text-sm">¡ALERTA DE PÁNICO!</h3>
-                <p class="text-xs text-red-200 mt-1" id="txtSos">Unidad reportando emergencia</p>
-                <button onclick="cerrarAlerta()" class="mt-2 text-[10px] bg-red-950/50 hover:bg-red-950 px-3 py-1 rounded border border-red-800 text-white">Entendido</button>
-            </div>
-        </div>
+
+        <div id="debug-panel">Esperando datos para diagnóstico...</div>
 
         <div id="map" class="w-full h-full"></div>
     </main>
@@ -111,13 +118,19 @@
         const map = L.map('map', { zoomControl: false }).setView([23.6345, -102.5528], 5);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { 
-            attribution: '&copy; Bitácora 57',
-            maxZoom: 19 
+            attribution: '&copy; Bitácora 57', maxZoom: 19 
         }).addTo(map);
 
         const marcadores = {}; 
         const rutasLayers = {}; 
         let empresaActual = "";
+
+        // DEBUGGER
+        function logDebug(msg) {
+            const panel = document.getElementById('debug-panel');
+            panel.innerHTML += `> ${msg}<br>`;
+            panel.scrollTop = panel.scrollHeight;
+        }
 
         auth.onAuthStateChanged(async user => {
             if (!user) { window.location.href = 'index.html'; return; }
@@ -131,16 +144,17 @@
                     alert("Tu usuario no tiene una empresa asignada. Contacta a soporte.");
                     logout();
                 }
-            } catch (error) { console.error(error); }
+            } catch (error) { console.error("Error:", error); }
         });
 
         function iniciarMonitoreo(empresa) {
             const listaContainer = document.getElementById('lista-unidades');
+            
             db.collection("jornadas")
                 .where("empresa", "==", empresa)
                 .onSnapshot((snapshot) => {
                     if(snapshot.empty) {
-                        listaContainer.innerHTML = `<div class="text-center mt-20 opacity-50"><i class="fa-solid fa-satellite-dish text-4xl mb-2"></i><p class="text-xs">Sin unidades activas</p></div>`;
+                        listaContainer.innerHTML = `<div class="text-center mt-20 opacity-50"><p class="text-xs">Sin unidades activas</p></div>`;
                         return;
                     }
                     if(listaContainer.innerText.includes("Esperando")) listaContainer.innerHTML = '';
@@ -153,91 +167,104 @@
                     });
                     actualizarContador();
                 });
-
-            db.collection("alertas_inspeccion")
-                .where("empresa", "==", empresa)
-                .where("tipo", "==", "PANICO_EMERGENCIA")
-                .orderBy("timestamp", "desc")
-                .limit(1)
-                .onSnapshot((snapshot) => {
-                    if(!snapshot.empty) {
-                        const alerta = snapshot.docs[0].data();
-                        const tiempoAlerta = alerta.timestamp?.toDate() || new Date();
-                        if ((new Date() - tiempoAlerta) / 60000 < 30) mostrarAlertaSOS(alerta);
-                    }
-                });
         }
 
         function procesarUnidad(id, data) {
             if (data.estatus === 'finalizado') { eliminarUnidad(id); return; }
 
-            // 1. ACTUALIZAR LISTA LATERAL
+            // 1. LISTA
             const lista = document.getElementById('lista-unidades');
             let item = document.getElementById(`card-${id}`);
-            
             const htmlContent = `
                 <div class="flex justify-between items-start">
                     <div>
                         <div class="flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full ${data.velocidad > 0 ? 'bg-green-500 animate-pulse' : 'bg-amber-500'}"></span>
+                            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                             <h3 class="font-bold text-white text-sm uppercase">${data.unidad || 'Sin Nombre'}</h3>
                         </div>
-                        <p class="text-xs text-slate-400 mt-1"><i class="fa-solid fa-user-astronaut mr-1"></i> ${data.operador}</p>
+                        <p class="text-xs text-slate-400 mt-1">${data.operador}</p>
                     </div>
-                    <div class="text-right">
-                        <span class="block text-lg font-mono font-bold text-amber-500">${Math.round(data.velocidad || 0)} <span class="text-[10px]">km/h</span></span>
-                    </div>
-                </div>
-                <div class="mt-2 pt-2 border-t border-slate-700/50 flex justify-between text-[10px] text-slate-500">
-                    <span><i class="fa-solid fa-location-dot mr-1"></i> ${data.origen || '...'} > ${data.destino || '...'}</span>
-                </div>
-            `;
-
+                    <div class="text-right"><span class="block text-lg font-mono font-bold text-amber-500">${Math.round(data.velocidad || 0)} km/h</span></div>
+                </div>`;
+            
             if (!item) {
                 item = document.createElement('div');
                 item.id = `card-${id}`;
-                item.className = "bg-slate-800/50 p-3 rounded-lg border border-slate-700 hover:border-amber-500 hover:bg-slate-800 cursor-pointer transition-all mb-2";
+                item.className = "bg-slate-800/50 p-3 rounded-lg border border-slate-700 mb-2 cursor-pointer hover:bg-slate-800";
                 item.onclick = () => enfocarMapa(id);
                 lista.prepend(item);
             }
             item.innerHTML = htmlContent;
 
-            // 2. ACTUALIZAR MAPA (¡CORREGIDO PARA MOSTRAR AUN SIN RUTA!)
+            // 2. DIAGNÓSTICO Y MAPA
             let posicionActual = null;
+            let fuente = "Ninguna";
 
-            // Opción A: Tiene historial de puntos (Dibujamos línea y marcador)
-            if (data.puntos_rastreo && data.puntos_rastreo.length > 0) {
-                const latlngs = data.puntos_rastreo.map(p => [p.lat, p.lng]);
-                posicionActual = latlngs[latlngs.length - 1];
+            // FUNCIÓN DE BÚSQUEDA PROFUNDA DE COORDENADAS
+            const buscarCoords = (obj) => {
+                if(!obj) return null;
+                // Caso 1: Estructura plana (lat/lng)
+                if ((obj.lat || obj.latitude) && (obj.lng || obj.long || obj.longitude)) {
+                    return [parseFloat(obj.lat || obj.latitude), parseFloat(obj.lng || obj.long || obj.longitude)];
+                }
+                return null;
+            };
 
-                if (rutasLayers[id]) map.removeLayer(rutasLayers[id]);
-                rutasLayers[id] = L.polyline(latlngs, {color: '#f59e0b', weight: 4, opacity: 0.7}).addTo(map);
-            } 
-            // Opción B: No tiene historial pero tiene ubicación actual única (Dibujamos solo marcador)
-            else if (data.ubicacion_actual) {
-                posicionActual = [data.ubicacion_actual.lat, data.ubicacion_actual.lng];
+            // Intentar leer de varios lugares
+            // A. Puntos de Rastreo (Historial)
+            if (data.puntos_rastreo && Array.isArray(data.puntos_rastreo) && data.puntos_rastreo.length > 0) {
+                const latlngs = [];
+                data.puntos_rastreo.forEach(p => {
+                    const c = buscarCoords(p); // <--- Busca plano
+                    if(!c && p.coords) { // <--- Busca anidado (React Native)
+                         const c2 = buscarCoords(p.coords);
+                         if(c2) latlngs.push(c2);
+                    } else if(c) {
+                        latlngs.push(c);
+                    }
+                });
+
+                if (latlngs.length > 0) {
+                    posicionActual = latlngs[latlngs.length - 1];
+                    fuente = "Historial (" + latlngs.length + " pts)";
+                    if (rutasLayers[id]) map.removeLayer(rutasLayers[id]);
+                    rutasLayers[id] = L.polyline(latlngs, {color: '#f59e0b', weight: 4}).addTo(map);
+                }
             }
 
-            // Si logramos obtener una posición, dibujamos el camión
-            if (posicionActual) {
+            // B. Ubicación Directa (Raíz, coords, location, etc.)
+            if (!posicionActual) {
+                posicionActual = buscarCoords(data) 
+                              || (data.coords ? buscarCoords(data.coords) : null) // React Native suele ponerlo aquí
+                              || (data.ubicacion_actual ? buscarCoords(data.ubicacion_actual) : null)
+                              || (data.ubicacion ? buscarCoords(data.ubicacion) : null);
+                if(posicionActual) fuente = "Ubicación Única";
+            }
+
+            // LOG DE DIAGNÓSTICO EN PANTALLA
+            if(posicionActual) {
+                logDebug(`OK: ${data.unidad} -> [${posicionActual[0].toFixed(4)}, ${posicionActual[1].toFixed(4)}] (${fuente})`);
+                
+                // PINTAR MARCADOR
                 const iconoCamion = L.divIcon({
                     className: 'custom-icon',
-                    html: `<div class="bg-amber-500 w-4 h-4 rounded-full border-2 border-white shadow-lg shadow-amber-500/50"></div>`,
-                    iconSize: [16, 16],
-                    iconAnchor: [8, 8]
+                    html: `<div class="bg-amber-500 w-4 h-4 rounded-full border-2 border-white shadow-lg"></div>`,
+                    iconSize: [16, 16]
                 });
 
                 if (marcadores[id]) {
                     marcadores[id].setLatLng(posicionActual);
-                    marcadores[id].setPopupContent(crearPopup(data));
                 } else {
-                    marcadores[id] = L.marker(posicionActual, {icon: iconoCamion}).addTo(map).bindPopup(crearPopup(data));
+                    marcadores[id] = L.marker(posicionActual, {icon: iconoCamion}).addTo(map).bindPopup(data.unidad);
+                    map.setView(posicionActual, 15); // Forzar centrado en la primera detección
                 }
-            }
-        }
 
-        function crearPopup(data) {
-            return `<div class="text-center"><strong class="text-amber-500">${data.unidad}</strong><br>${Math.round(data.velocidad || 0)} km/h<br><span class="text-xs text-slate-400">En ruta</span></div>`;
+            } else {
+                // SI ENTRA AQUÍ, VEREMOS QUÉ PROPIEDADES TIENE EL OBJETO
+                const llaves = Object.keys(data).join(", ");
+                logDebug(`ERROR: ${data.unidad} SIN COORDENADAS. Campos disponibles: ${llaves}`);
+                console.log("DATA COMPLETA:", data); // Ver en F12
+            }
         }
 
         function eliminarUnidad(id) {
@@ -259,21 +286,9 @@
             }
         }
 
-        function mostrarAlertaSOS(alerta) {
-            const box = document.getElementById('alertaSos');
-            const txt = document.getElementById('txtSos');
-            box.classList.remove('hidden');
-            txt.innerHTML = `<strong>${alerta.usuario}</strong><br>${alerta.detalles}`;
-            if(alerta.ubicacion) {
-                map.flyTo([alerta.ubicacion.lat, alerta.ubicacion.long], 16);
-                L.marker([alerta.ubicacion.lat, alerta.ubicacion.long], {
-                    icon: L.divIcon({html: '<i class="fa-solid fa-triangle-exclamation text-red-500 text-3xl"></i>', className: 'bg-transparent'})
-                }).addTo(map).bindPopup(`<b class="text-red-500">¡EMERGENCIA!</b>`).openPopup();
-            }
+        function logout() {
+            auth.signOut().then(() => window.location.href = 'index.html');
         }
-
-        function cerrarAlerta() { document.getElementById('alertaSos').classList.add('hidden'); }
-        function logout() { auth.signOut().then(() => window.location.href = 'index.html'); }
     </script>
 </body>
 </html>
