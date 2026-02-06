@@ -1,13 +1,14 @@
 {
   "cli": {
-    "version": ">= 12.5.2"
+    "version": ">= 12.5.2",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
       "android": {
-        "buildType": "apk" 
+        "buildType": "apk"
       }
     },
     "preview": {
@@ -18,7 +19,8 @@
     },
     "production": {
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "autoIncrement": true
       }
     }
   },

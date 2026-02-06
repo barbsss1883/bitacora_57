@@ -1,6 +1,8 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import CryptoJS from 'crypto-js';
+import { Alert } from 'react-native';
+import Purchases from 'react-native-purchases'; // <--- IMPORTACIÓN DE SEGURIDAD
 
 export const generarPDF = async (
   jornada: any, 
@@ -11,21 +13,37 @@ export const generarPDF = async (
 ) => {
   if (!jornada) return;
 
+  // --- 0. VALIDACIÓN DE SEGURIDAD (SOLO PRO) ---
+  try {
+    const customerInfo = await Purchases.getCustomerInfo();
+    const esPro = typeof customerInfo.entitlements.active['pro'] !== "undefined";
+
+    if (!esPro) {
+        // Si no es PRO, no permitimos que el motor de PDF trabaje
+        Alert.alert(
+            "Función Bloqueada",
+            "Necesitas una suscripción PRO activa para generar y compartir documentos oficiales."
+        );
+        return null; 
+    }
+  } catch (e) {
+    console.log("Error de validación en motor PDF", e);
+    // En caso de error de conexión, por seguridad, podrías elegir bloquear o permitir. 
+    // Aquí bloqueamos para proteger el modelo de negocio.
+    return null;
+  }
+
   const listaPausas = pausas || [];
   const listaIncidencias = incidencias || [];
   const listaPuntos = puntosRastreo || [];
 
   // --- 1. GENERACIÓN DE SELLO DIGITAL ROBUSTO (SHA1) ---
-  // Crea una firma única basada en los datos del viaje
   const cadenaOriginal = `B57|${jornada.id}|${jornada.operador || 'OP'}|${jornada.placas || 'PLACAS'}|${jornada.fecha_inicio}|${jornada.km_totales || 0}`;
   const selloDigital = CryptoJS.SHA1(cadenaOriginal).toString().toUpperCase();
 
   // --- 2. QR OFICIAL CON TU LINK REAL ---
-  // Aquí usamos el link que me acabas de dar
   const baseUrl = "https://device-streaming-61499c4a.web.app/validar.html";
   const urlValidacion = `${baseUrl}?id=${jornada.id}`;
-  
-  // Generamos la imagen del QR apuntando a esa URL
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(urlValidacion)}`;
 
   const inicio = new Date(jornada.fecha_inicio).toLocaleString();

@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Polyline, Marker, PROVIDER_GOOGLE } from 'react-native-maps'; 
+import Purchases from 'react-native-purchases'; // <--- INTEGRACIÓN REVENUECAT
 
 // BD y Servicios
 import { obtenerJornadas, eliminarViaje } from '../db/database'; 
@@ -81,6 +82,31 @@ export default function Historial() {
 
   const handleGenerarPDF = async () => {
     if (!itemSeleccionado) return;
+
+    // --- BLOQUEO PREMIUM INICIO ---
+    try {
+        const customerInfo = await Purchases.getCustomerInfo();
+        const esPro = typeof customerInfo.entitlements.active['pro'] !== "undefined";
+
+        if (!esPro) {
+            Alert.alert(
+                "Función Premium ⭐",
+                "La generación de reportes PDF oficiales y códigos QR es exclusiva para usuarios PRO.\n\nEvita multas de la Guardia Nacional y profesionaliza tu trabajo.",
+                [
+                    { text: "Más tarde", style: "cancel" },
+                    { text: "VER PLANES", onPress: () => {
+                        setModalVisible(false); // Cerramos modal para ir a suscripción
+                        router.push('/PantallaSuscripcion');
+                    }}
+                ]
+            );
+            return; // Detenemos la ejecución aquí
+        }
+    } catch (e) {
+        console.log("Error verificando estatus pro", e);
+    }
+    // --- BLOQUEO PREMIUM FIN ---
+
     setProcesandoPdf(true);
     try {
         // Parsear datos que vienen como JSON string desde SQLite
@@ -156,18 +182,14 @@ export default function Historial() {
     </TouchableOpacity>
   );
 
-  // --- COMPONENTE MAPA BLINDADO CONTRA CRASHES ---
   const MapaHistorial = ({ rutaJson }: { rutaJson: string }) => {
       if (!rutaJson) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Sin datos de ruta</Text></View>;
       
       let coordenadas = [];
       try {
           const parsed = JSON.parse(rutaJson);
-          
           if (!Array.isArray(parsed)) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Error de datos</Text></View>;
 
-          // 🔥 FILTRO DE SEGURIDAD (AQUÍ ESTÁ LA MAGIA)
-          // Eliminamos cualquier punto que no tenga lat/long válida
           coordenadas = parsed
             .filter((p: any) => p && !isNaN(parseFloat(p.latitude)) && !isNaN(parseFloat(p.longitude)))
             .map((p: any) => ({
@@ -179,7 +201,6 @@ export default function Historial() {
 
       if (coordenadas.length === 0) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Ruta vacía o inválida</Text></View>;
 
-      // Calculamos centro inicial
       const inicial = coordenadas[0];
 
       return (
@@ -235,7 +256,6 @@ export default function Historial() {
         />
       )}
 
-      {/* MODAL DETALLE */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalBg}>
             <View style={styles.modalHeader}>
@@ -246,8 +266,6 @@ export default function Historial() {
             </View>
             
             <ScrollView contentContainerStyle={{padding: 20}}>
-                
-                {/* 1. SECCIÓN DE MAPA */}
                 <Text style={styles.sectionTitle}>Ruta Recorrida</Text>
                 {itemSeleccionado?.ruta_geojson ? (
                     <MapaHistorial rutaJson={itemSeleccionado.ruta_geojson} />
@@ -258,7 +276,6 @@ export default function Historial() {
                     </View>
                 )}
 
-                {/* 2. DATOS GENERALES */}
                 <Text style={styles.sectionTitle}>Información</Text>
                 <View style={styles.detailBox}>
                     <DetailRow label="Unidad" value={itemSeleccionado?.unidad} />
@@ -269,9 +286,7 @@ export default function Historial() {
                     <DetailRow label="Destino" value={itemSeleccionado?.destino} />
                 </View>
 
-                {/* 3. BOTONES DE ACCIÓN */}
                 <View style={{gap: 15, marginTop: 30, marginBottom: 50}}>
-                    {/* Re-imprimir PDF */}
                     <TouchableOpacity 
                         style={styles.btnAction} 
                         onPress={handleGenerarPDF}
@@ -281,7 +296,6 @@ export default function Historial() {
                         <Text style={styles.btnText}>GENERAR PDF / QR</Text>
                     </TouchableOpacity>
 
-                    {/* Eliminar (Botón Rojo) */}
                     <TouchableOpacity 
                         style={[styles.btnAction, {backgroundColor: 'rgba(239, 68, 68, 0.15)', borderWidth:1, borderColor: COLORS.danger}]} 
                         onPress={confirmarEliminacion}
@@ -290,7 +304,6 @@ export default function Historial() {
                         <Text style={[styles.btnText, {color: COLORS.danger}]}>ELIMINAR REGISTRO</Text>
                     </TouchableOpacity>
                 </View>
-
             </ScrollView>
         </View>
       </Modal>
@@ -324,8 +337,6 @@ const styles = StyleSheet.create({
   value: { color: COLORS.text, fontWeight: '500', flex: 1 },
   divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 10 },
   status: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
-  
-  // Estilos Modal
   modalBg: { flex: 1, backgroundColor: COLORS.bg },
   modalHeader: { 
       padding: 20, paddingTop: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -334,15 +345,11 @@ const styles = StyleSheet.create({
   modalTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
   sectionTitle: { color: COLORS.primary, marginVertical: 15, fontWeight: 'bold', fontSize: 16 },
   detailBox: { backgroundColor: COLORS.card, padding: 15, borderRadius: 10 },
-  
-  // Mapa
   mapContainer: { height: 250, borderRadius: 12, overflow: 'hidden', backgroundColor: '#111', borderWidth:1, borderColor: COLORS.border },
   map: { width: '100%', height: '100%' },
   mapOverlay: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', padding: 5, borderRadius: 5 },
   mapOverlayText: { color: 'white', fontSize: 10 },
-  mapError: { flex: 1, justifyContent: 'center', alignItems: 'center', height: 250 }, // Height agregado para que se vea el msj
-
-  // Botones
+  mapError: { flex: 1, justifyContent: 'center', alignItems: 'center', height: 250 },
   btnAction: { 
       flexDirection: 'row', backgroundColor: COLORS.primary, padding: 15, 
       borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 10 
