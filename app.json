@@ -34,14 +34,21 @@
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyD5yqF31xg4hiBZCqGnLZWH1KAgTZj-uA0"
-        },
-        "googleMobileAdsAppId": "ca-app-pub-9657693965267569~7971749819"
+        }
+        
       }
     },
     "plugins": [
       "expo-router",
       "expo-sqlite",
       "@react-native-google-signin/google-signin",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-9657693965267569~7971749819",
+          "iosAppId": "ca-app-pub-9657693965267569~7971749819"
+        }
+      ],
       [
         "expo-location",
         {
