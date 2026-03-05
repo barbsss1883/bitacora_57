@@ -27,6 +27,18 @@
     ],
     "rewrites": [
       {
+        "source": "/eliminar-cuenta",
+        "destination": "/eliminar-cuenta.html"
+      },
+      {
+        "source": "/eliminar-cuenta.html",
+        "destination": "/eliminar-cuenta.html"
+      },
+      {
+        "source": "/validar",
+        "destination": "/validar.html"
+      },
+      {
         "source": "/validar.html",
         "destination": "/validar.html"
       },

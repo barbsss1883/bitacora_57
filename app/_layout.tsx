@@ -2,11 +2,17 @@ import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StatusBar, ActivityIndicator, View } from 'react-native'; 
 import { initDatabase } from '../db/database';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 export default function Layout() {
   const [dbLista, setDbLista] = useState(false);
 
   useEffect(() => {
+    // configuración de Google Signin centralizada
+    GoogleSignin.configure({
+      webClientId:"363075260432-73vjlu0ukn1u59sjgf5dpi1mkunda880.apps.googleusercontent.com",
+    });
+
     // Iniciamos la BD y esperamos a que termine
     initDatabase()
       .then(() => {

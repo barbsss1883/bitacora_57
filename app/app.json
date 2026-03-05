@@ -1,34 +1,76 @@
 {
   "expo": {
     "name": "Bitacora57",
-    "slug": "bitacora57",
-    "version": "1.0.0",
+    "slug": "Bitacora57",
+    "scheme": "bitacora57",
+    "version": "3.0.1",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "dark",
+    "owner": "luis_g0418",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "updates": {
-      "fallbackToCacheTimeout": 0
-    },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
-    "ios": {
-      "supportsTablet": true
+      "backgroundColor": "#0f172a"
     },
     "android": {
       "package": "com.luisg0418.bitacora57",
+      "versionCode": 4,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "com.google.android.gms.permission.AD_ID",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyD5yqF31xg4hiBZCqGnLZWH1KAgTZj-uA0"
+        }
       }
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "ios": {
+      "bundleIdentifier": "com.luisg0418.bitacora57"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "@react-native-google-signin/google-signin",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-9657693965267569~7971749819",
+          "iosAppId": "ca-app-pub-9657693965267569~7971749819"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permitir que Bitácora57 use tu ubicación en segundo plano para alertarte de zonas de riesgo durante tu ruta.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsImpl": "mapbox",
+          "RNMapboxMapsDownloadToken": "sk.eyJ1IjoibHVpc2cwNDE4IiwiYSI6ImNtaXhqOGpqNjA1NDIzZnByOWc0dG16aXQifQ.tNo8k-4i6yXCpdGwR2dl3Q"
+        }
+      ]
+    ]
   }
 }

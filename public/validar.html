@@ -17,15 +17,19 @@
     </div>
 
     <div id="content" class="hidden w-full max-w-md bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 overflow-hidden">
-        <div class="bg-green-600 p-6 text-center">
-            <div class="bg-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3">
-                <i class="fa-solid fa-check text-3xl text-green-600"></i>
+        <div id="status-banner" class="bg-slate-600 p-6 text-center">
+            <div id="status-icon-wrap" class="bg-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3">
+                <i id="status-icon" class="fa-solid fa-shield-halved text-3xl text-slate-600"></i>
             </div>
-            <h1 class="text-xl font-bold text-white tracking-wide">VIAJE VERIFICADO</h1>
-            <p class="text-green-100 text-[10px] uppercase tracking-wider mt-1">Documento Oficial NOM-087-SCT-2-2017</p>
+            <h1 id="status-title" class="text-xl font-bold text-white tracking-wide">VERIFICANDO...</h1>
+            <p id="status-subtitle" class="text-slate-100 text-[10px] uppercase tracking-wider mt-1">Documento Oficial NOM-087-SCT-2-2017</p>
         </div>
 
         <div class="p-6 space-y-4">
+            <div class="flex justify-between border-b border-slate-700 pb-2">
+                <span class="text-slate-400 text-xs uppercase tracking-wide">ID Viaje</span>
+                <span class="font-bold text-cyan-400 text-right" id="val-id">---</span>
+            </div>
             <div class="flex justify-between border-b border-slate-700 pb-2">
                 <span class="text-slate-400 text-xs uppercase tracking-wide">Operador</span>
                 <span class="font-bold text-white text-right" id="val-operador">---</span>
@@ -60,10 +64,20 @@
                 <span class="text-slate-400 text-xs uppercase tracking-wide">Fecha Inicio</span>
                 <span class="font-bold text-white text-sm text-right" id="val-inicio">---</span>
             </div>
-            
+            <div class="flex justify-between border-b border-slate-700 pb-2">
+                <span class="text-slate-400 text-xs uppercase tracking-wide">KM Totales</span>
+                <span class="font-bold text-white text-sm text-right" id="val-km">---</span>
+            </div>
+            <div class="flex justify-between border-b border-slate-700 pb-2">
+                <span class="text-slate-400 text-xs uppercase tracking-wide">Estado Sello</span>
+                <span class="font-bold text-sm text-right" id="val-estado">---</span>
+            </div>
+
             <div class="mt-6 p-3 bg-slate-950 rounded-lg border border-slate-800">
-                <p class="text-[9px] text-amber-600 font-bold mb-1 uppercase tracking-widest">Sello Digital SHA1 (Cadena Original)</p>
+                <p class="text-[9px] text-amber-500 font-bold mb-1 uppercase tracking-widest">Sello Digital SHA-256 (Guardado)</p>
                 <p class="text-[10px] font-mono break-all text-slate-500 leading-tight" id="val-sello">---</p>
+                <p class="text-[9px] text-slate-400 font-bold mt-3 mb-1 uppercase tracking-widest">Sello Recalculado</p>
+                <p class="text-[10px] font-mono break-all text-slate-500 leading-tight" id="val-sello-recalc">---</p>
             </div>
         </div>
     </div>
@@ -83,6 +97,84 @@
         const urlParams = new URLSearchParams(window.location.search);
         const idViaje = urlParams.get('id');
 
+        const formatDate = (value) => {
+            if (!value) return '---';
+            if (typeof value === 'string' || typeof value === 'number') {
+                const date = new Date(value);
+                return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('es-MX');
+            }
+            if (typeof value.toDate === 'function') {
+                return value.toDate().toLocaleString('es-MX');
+            }
+            return '---';
+        };
+
+        const toNumber = (value) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+
+        const setStatus = (variant, title, subtitle, estadoTexto) => {
+            const banner = document.getElementById('status-banner');
+            const iconWrap = document.getElementById('status-icon-wrap');
+            const icon = document.getElementById('status-icon');
+            const estado = document.getElementById('val-estado');
+            const statusTitle = document.getElementById('status-title');
+            const statusSubtitle = document.getElementById('status-subtitle');
+
+            const styles = {
+                ok: {
+                    banner: 'bg-green-600',
+                    iconWrap: 'bg-white',
+                    icon: 'fa-solid fa-check text-3xl text-green-600',
+                    estado: 'text-emerald-400',
+                },
+                warn: {
+                    banner: 'bg-amber-500',
+                    iconWrap: 'bg-white',
+                    icon: 'fa-solid fa-triangle-exclamation text-3xl text-amber-500',
+                    estado: 'text-amber-400',
+                },
+                bad: {
+                    banner: 'bg-red-700',
+                    iconWrap: 'bg-white',
+                    icon: 'fa-solid fa-xmark text-3xl text-red-600',
+                    estado: 'text-red-400',
+                }
+            };
+
+            const selected = styles[variant] || styles.bad;
+            banner.className = `${selected.banner} p-6 text-center`;
+            iconWrap.className = `${selected.iconWrap} rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3`;
+            icon.className = selected.icon;
+            statusTitle.innerText = title;
+            statusSubtitle.innerText = subtitle;
+            estado.innerText = estadoTexto;
+            estado.className = `font-bold text-sm text-right ${selected.estado}`;
+        };
+
+        const sha256Hex = async (text) => {
+            const buffer = new TextEncoder().encode(text);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+        };
+
+        const getPayloadForSeal = (data, idDoc) => {
+            const idNum = Number(idDoc);
+            const id = Number.isFinite(idNum) ? idNum : idDoc;
+            const fechaInicio = data.fecha_inicio || data.fecha_inicio_local || '';
+            const kmTotales = toNumber(data.km_totales ?? data.km_calculados ?? 0);
+
+            return JSON.stringify({
+                id,
+                operador: data.operador || '',
+                unidad: data.unidad || '',
+                fecha_inicio: fechaInicio,
+                km_totales: kmTotales
+            });
+        };
+
         async function validar() {
             if (!idViaje) { 
                 document.getElementById('loader').innerHTML = '<p class="text-red-500 font-bold">❌ Error: ID de viaje no proporcionado.</p>'; 
@@ -90,31 +182,67 @@
             }
 
             try {
-                // Buscamos en la colección "jornadas" que es la que usas ahora
-                let doc = await db.collection("jornadas").doc(idViaje).get();
-                
-                // Fallback por si acaso sigue en "rutas_maestras"
-                if (!doc.exists) {
-                    doc = await db.collection("rutas_maestras").doc(idViaje).get();
-                }    
+                const doc = await db.collection("jornadas").doc(idViaje).get();
 
                 if (doc.exists) {
                     const data = doc.data();
-                    
-                    // Llenado de datos básicos
+                    const kmTotales = toNumber(data.km_totales ?? data.km_calculados ?? 0);
+                    const selloGuardado = (data.sello_digital || '').toString().trim();
+
+                    document.getElementById('val-id').innerText = idViaje;
                     document.getElementById('val-operador').innerText = data.operador || '---';
                     document.getElementById('val-licencia').innerText = data.licencia || '---';
                     document.getElementById('val-unidad').innerText = data.unidad || '---';
                     document.getElementById('val-empresa').innerText = data.permisionario || data.empresa || '---';
-                    document.getElementById('val-inicio').innerText = data.fecha_inicio ? new Date(data.fecha_inicio).toLocaleString() : '---';
-                    
-                    // NUEVOS DATOS: ORIGEN Y DESTINO
+                    document.getElementById('val-inicio').innerText = formatDate(data.fecha_inicio || data.fecha_inicio_local);
+                    document.getElementById('val-km').innerText = `${kmTotales.toFixed(2)} km`;
                     document.getElementById('val-origen').innerText = data.origen || 'No especificado';
                     document.getElementById('val-destino').innerText = data.destino || 'No especificado';
-                    
-                    // Sello digital (si no existe, ponemos uno genérico validado)
-                    document.getElementById('val-sello').innerText = data.sello_digital || "VERIFICADO POR SISTEMA CENTRAL - ID: " + idViaje;
-                    
+
+                    document.getElementById('val-sello').innerText = selloGuardado || 'NO REGISTRADO';
+
+                    let selloRecalculado = '';
+                    if (selloGuardado) {
+                        const payload = getPayloadForSeal(data, idViaje);
+                        selloRecalculado = await sha256Hex(payload);
+                        document.getElementById('val-sello-recalc').innerText = selloRecalculado;
+                    } else {
+                        document.getElementById('val-sello-recalc').innerText = 'NO DISPONIBLE';
+                    }
+
+                    const selloValido = selloGuardado && selloRecalculado && selloGuardado.toLowerCase() === selloRecalculado.toLowerCase();
+                    const servidorVerificado = data.servidor_verificado === true;
+
+                    if (selloValido && servidorVerificado) {
+                        setStatus(
+                            'ok',
+                            'VIAJE VERIFICADO',
+                            'Sello SHA-256 y registro servidor válidos',
+                            'VALIDO'
+                        );
+                    } else if (selloValido) {
+                        setStatus(
+                            'warn',
+                            'REGISTRO PARCIAL',
+                            'Sello correcto, pero sin bandera de servidor',
+                            'PARCIAL'
+                        );
+                    } else if (!selloGuardado) {
+                        setStatus(
+                            'warn',
+                            'REGISTRO SIN SELLO',
+                            'Documento encontrado, pero sin sello digital',
+                            'SIN SELLO'
+                        );
+                    } else {
+                        setStatus(
+                            'bad',
+                            'ALERTA DE INTEGRIDAD',
+                            'El sello digital no coincide con los datos',
+                            'INVALIDO'
+                        );
+                    }
+
                     document.getElementById('loader').classList.add('hidden');
                     document.getElementById('content').classList.remove('hidden');
                 } else {

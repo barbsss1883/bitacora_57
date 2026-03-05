@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
-  Alert, Modal, ScrollView, Dimensions 
+  Alert, Modal, ScrollView
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import MapView, { Polyline, Marker, PROVIDER_GOOGLE } from 'react-native-maps'; 
+import Mapbox from '@rnmapbox/maps';
 import Purchases from 'react-native-purchases'; // <--- INTEGRACIÓN REVENUECAT
 
 // BD y Servicios
-import { obtenerJornadas, eliminarViaje } from '../db/database'; 
+import { obtenerJornadas, eliminarViaje, obtenerDetalleJornada } from '../db/database'; 
 import { generarPDF } from '../src/services/PdfGenerator';
 
 const COLORS = {
@@ -23,8 +24,6 @@ const COLORS = {
   border: '#334155',
   mapPath: '#3b82f6'
 };
-
-const { width } = Dimensions.get('window');
 
 export default function Historial() {
   const router = useRouter();
@@ -109,12 +108,65 @@ export default function Historial() {
 
     setProcesandoPdf(true);
     try {
-        // Parsear datos que vienen como JSON string desde SQLite
-        let pausas = [], incidencias = [], inspeccion = null;
-        
-        try { pausas = JSON.parse(itemSeleccionado.pausas_json || '[]'); } catch(e){}
-        try { incidencias = JSON.parse(itemSeleccionado.incidencias_json || '[]'); } catch(e){}
-        try { inspeccion = JSON.parse(itemSeleccionado.inspeccion_json || 'null'); } catch(e){}
+        let pausas: any[] = [];
+        let incidencias: any[] = [];
+        let inspeccion: any = null;
+
+        try {
+            const detalle = await obtenerDetalleJornada(Number(itemSeleccionado.id));
+            pausas = Array.isArray(detalle?.pausas) ? detalle.pausas : [];
+            incidencias = Array.isArray(detalle?.incidencias) ? detalle.incidencias : [];
+
+            const inspecciones = Array.isArray(detalle?.inspecciones) ? detalle.inspecciones : [];
+            if (inspecciones.length > 0) {
+                const ultimaInspeccion: any = [...inspecciones].sort(
+                    (a: any, b: any) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime()
+                )[0];
+                let items = {};
+                try { items = JSON.parse(ultimaInspeccion.detalles_json || '{}'); } catch (e) {}
+
+                const fechaInspeccion = ultimaInspeccion.fecha ? new Date(ultimaInspeccion.fecha) : null;
+                inspeccion = {
+                    fecha: fechaInspeccion ? fechaInspeccion.toISOString().split('T')[0] : '---',
+                    hora: fechaInspeccion ? fechaInspeccion.toLocaleTimeString() : '---',
+                    tipo: ultimaInspeccion.tipo || 'general',
+                    items,
+                    comentarios: ultimaInspeccion.comentarios || '',
+                    estatus: (ultimaInspeccion.comentarios || '').trim().length > 5 ? 'CON OBSERVACIONES' : 'APROBADO'
+                };
+            }
+        } catch (e) {
+            console.log("Error leyendo detalle de jornada para PDF", e);
+        }
+
+        if (pausas.length === 0) {
+            try { pausas = JSON.parse(itemSeleccionado.pausas_json || '[]'); } catch(e){}
+        }
+        if (incidencias.length === 0) {
+            try { incidencias = JSON.parse(itemSeleccionado.incidencias_json || '[]'); } catch(e){}
+        }
+
+        const fechaViaje = itemSeleccionado?.fecha_inicio
+          ? String(itemSeleccionado.fecha_inicio).split('T')[0]
+          : null;
+        if (!inspeccion && fechaViaje) {
+            try {
+                const inspeccionRaw = await AsyncStorage.getItem(`INSPECCION_${fechaViaje}`);
+                if (inspeccionRaw) inspeccion = JSON.parse(inspeccionRaw);
+            } catch (e) {}
+        }
+        if (!inspeccion) {
+            try {
+                const ultimaFecha = await AsyncStorage.getItem('ULTIMA_INSPECCION');
+                if (ultimaFecha) {
+                    const inspeccionRaw = await AsyncStorage.getItem(`INSPECCION_${ultimaFecha}`);
+                    if (inspeccionRaw) inspeccion = JSON.parse(inspeccionRaw);
+                }
+            } catch (e) {}
+        }
+        if (!inspeccion) {
+            try { inspeccion = JSON.parse(itemSeleccionado.inspeccion_json || 'null'); } catch(e){}
+        }
         
         // Reconstruir puntos de rastreo para el PDF
         let puntosRastreo = [];
@@ -185,44 +237,96 @@ export default function Historial() {
   const MapaHistorial = ({ rutaJson }: { rutaJson: string }) => {
       if (!rutaJson) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Sin datos de ruta</Text></View>;
       
-      let coordenadas = [];
+      let coordenadas: number[][] = [];
       try {
           const parsed = JSON.parse(rutaJson);
           if (!Array.isArray(parsed)) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Error de datos</Text></View>;
 
           coordenadas = parsed
             .filter((p: any) => p && !isNaN(parseFloat(p.latitude)) && !isNaN(parseFloat(p.longitude)))
-            .map((p: any) => ({
-              latitude: parseFloat(p.latitude),
-              longitude: parseFloat(p.longitude)
-          }));
+            .map((p: any) => [parseFloat(p.longitude), parseFloat(p.latitude)]);
 
       } catch (e) { return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Error al leer mapa</Text></View>; }
 
       if (coordenadas.length === 0) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Ruta vacía o inválida</Text></View>;
 
-      const inicial = coordenadas[0];
+      const puntoInicial = coordenadas[0];
+      const puntoFinal = coordenadas[coordenadas.length - 1];
+      const latitudes = coordenadas.map((coord) => coord[1]);
+      const longitudes = coordenadas.map((coord) => coord[0]);
+      const minLat = Math.min(...latitudes);
+      const maxLat = Math.max(...latitudes);
+      const minLng = Math.min(...longitudes);
+      const maxLng = Math.max(...longitudes);
+      const puedeAjustarBounds = coordenadas.length > 1 && (minLat !== maxLat || minLng !== maxLng);
 
       return (
           <View style={styles.mapContainer}>
-              <MapView
-                  provider={PROVIDER_GOOGLE}
+              <Mapbox.MapView
                   style={styles.map}
-                  initialRegion={{
-                      latitude: inicial.latitude,
-                      longitude: inicial.longitude,
-                      latitudeDelta: 0.05,
-                      longitudeDelta: 0.05,
-                  }}
+                  styleURL={Mapbox.StyleURL.Dark}
+                  logoEnabled={false}
+                  attributionEnabled={false}
+                  scaleBarEnabled={false}
               >
-                  <Polyline 
-                      coordinates={coordenadas}
-                      strokeColor={COLORS.mapPath}
-                      strokeWidth={4}
-                  />
-                  <Marker coordinate={coordenadas[0]} title="Inicio" pinColor="green" />
-                  <Marker coordinate={coordenadas[coordenadas.length-1]} title="Fin" pinColor="red" />
-              </MapView>
+                  {puedeAjustarBounds ? (
+                    <Mapbox.Camera
+                      bounds={{
+                        ne: [maxLng, maxLat],
+                        sw: [minLng, minLat],
+                        paddingTop: 40,
+                        paddingBottom: 40,
+                        paddingLeft: 40,
+                        paddingRight: 40,
+                      }}
+                      animationDuration={1000}
+                    />
+                  ) : (
+                    <Mapbox.Camera
+                      centerCoordinate={puntoInicial}
+                      zoomLevel={14}
+                      animationDuration={1000}
+                    />
+                  )}
+
+                  {coordenadas.length > 1 ? (
+                    <Mapbox.ShapeSource
+                      id={`routeSourceHistorial-${coordenadas.length}`}
+                      shape={{
+                        type: 'Feature',
+                        geometry: { type: 'LineString', coordinates: coordenadas },
+                        properties: {},
+                      }}
+                    >
+                      <Mapbox.LineLayer
+                        id={`routeLayerHistorial-${coordenadas.length}`}
+                        style={{ lineColor: COLORS.mapPath, lineWidth: 4, lineCap: 'round', lineJoin: 'round' }}
+                      />
+                    </Mapbox.ShapeSource>
+                  ) : null}
+
+                  <Mapbox.ShapeSource
+                    id={`startSourceHistorial-${coordenadas.length}`}
+                    shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: puntoInicial }, properties: {} }}
+                  >
+                    <Mapbox.CircleLayer
+                      id={`startLayerHistorial-${coordenadas.length}`}
+                      style={{ circleRadius: 6, circleColor: '#22c55e', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }}
+                    />
+                  </Mapbox.ShapeSource>
+
+                  {coordenadas.length > 1 ? (
+                    <Mapbox.ShapeSource
+                      id={`endSourceHistorial-${coordenadas.length}`}
+                      shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: puntoFinal }, properties: {} }}
+                    >
+                      <Mapbox.CircleLayer
+                        id={`endLayerHistorial-${coordenadas.length}`}
+                        style={{ circleRadius: 6, circleColor: '#ef4444', circleStrokeWidth: 2, circleStrokeColor: '#ffffff' }}
+                      />
+                    </Mapbox.ShapeSource>
+                  ) : null}
+              </Mapbox.MapView>
               <View style={styles.mapOverlay}>
                   <Text style={styles.mapOverlayText}>Ruta Grabada</Text>
               </View>

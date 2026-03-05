@@ -5,6 +5,17 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Crypto from 'expo-crypto'; 
 
 let cachedDb: SQLite.SQLiteDatabase | null = null;
+const PASSWORD_HASH_PREFIX = 'sha256$';
+
+const hasPasswordHashPrefix = (value: string) => value.startsWith(PASSWORD_HASH_PREFIX);
+
+const hashPassword = async (plainPassword: string) => {
+  const digest = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    `B57-PASSWORD-V1:${plainPassword}`
+  );
+  return `${PASSWORD_HASH_PREFIX}${digest}`;
+};
 
 // --- FUNCIÓN DE CONEXIÓN PRINCIPAL ---
 const getDB = async () => {
@@ -187,6 +198,15 @@ export const finalizarJornada = async (id: number, firma: string, rutaGeoJson: s
     const jornada: any = await db.getFirstAsync('SELECT operador FROM jornadas WHERE id = ?', [id]);
     const operador = jornada?.operador || "Anonimo";
     
+    // --- SI NO HAY RUTA ENVIADA, LA GENERAMOS DESDE LOS PUNTOS GPS ---
+    let rutaFinal = rutaGeoJson;
+    if (!rutaFinal) {
+      const puntosGPS = await db.getAllAsync('SELECT latitud, longitud, velocidad, fecha FROM puntos_gps WHERE jornada_id = ? ORDER BY fecha ASC', [id]);
+      if (puntosGPS && puntosGPS.length > 0) {
+        rutaFinal = JSON.stringify(puntosGPS);
+      }
+    }
+    
     const sello = await generarSelloDigital(id, fin, operador, kmTotales);
 
     await db.runAsync(
@@ -198,7 +218,7 @@ export const finalizarJornada = async (id: number, firma: string, rutaGeoJson: s
         sello_digital = ?, 
         estatus = 'finalizado' 
       WHERE id = ?`, 
-      [fin, firma || '', rutaGeoJson || null, kmTotales, sello, id]
+      [fin, firma || '', rutaFinal || null, kmTotales, sello, id]
     );
     return true;
   } catch (e) {
@@ -210,8 +230,22 @@ export const finalizarJornada = async (id: number, firma: string, rutaGeoJson: s
 export const loginUsuario = async (email: string, pass: string) => {
   try {
     const db = await getDB();
-    const row = await db.getFirstAsync('SELECT * FROM usuarios WHERE email = ? AND password = ?', [email, pass]);
-    return row || null;
+    const row: any = await db.getFirstAsync('SELECT * FROM usuarios WHERE email = ?', [email]);
+    if (!row) return null;
+
+    const passwordGuardada = row.password || '';
+
+    if (hasPasswordHashPrefix(passwordGuardada)) {
+      const hashIngresado = await hashPassword(pass || '');
+      return hashIngresado === passwordGuardada ? row : null;
+    }
+
+    if ((pass || '') !== passwordGuardada) return null;
+
+    // Migración transparente: si la contraseña estaba en texto plano, la convertimos a hash.
+    const hashMigrado = await hashPassword(pass || '');
+    await db.runAsync('UPDATE usuarios SET password = ? WHERE id = ?', [hashMigrado, row.id]);
+    return row;
   } catch (e) {
     console.error('loginUsuario error:', e);
     return null;
@@ -221,7 +255,11 @@ export const loginUsuario = async (email: string, pass: string) => {
 export const registrarUsuario = async (nombre: string, email: string, pass: string) => {
   try {
     const db = await getDB();
-    const res = await db.runAsync('INSERT INTO usuarios (nombre, email, password) VALUES (?, ?, ?)', [nombre || '', email || '', pass || '']);
+    const passwordHash = await hashPassword(pass || '');
+    const res = await db.runAsync(
+      'INSERT INTO usuarios (nombre, email, password) VALUES (?, ?, ?)',
+      [nombre || '', email || '', passwordHash]
+    );
     return res.lastInsertRowId;
   } catch (e) {
     console.error('registrarUsuario error:', e);
@@ -327,6 +365,44 @@ export const insertarPuntoGPS = async (jornadaId: number, lat: number, long: num
   }
 };
 
+// --- FUNCIÓN AUXILIAR: CALCULAR DISTANCIA TOTAL EN KM ---
+export const calcularDistanciaTotalKm = (puntos: any[]): number => {
+  if (!puntos || puntos.length < 2) return 0;
+  
+  const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + 
+              Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+  
+  let distanciaTotal = 0;
+  for (let i = 0; i < puntos.length - 1; i++) {
+    const p1 = puntos[i];
+    const p2 = puntos[i + 1];
+    if (p1.latitud && p1.longitud && p2.latitud && p2.longitud) {
+      distanciaTotal += getDistanceFromLatLonInKm(p1.latitud, p1.longitud, p2.latitud, p2.longitud);
+    }
+  }
+  return parseFloat(distanciaTotal.toFixed(2));
+};
+
+// --- FUNCIÓN AUXILIAR: OBTENER KM TOTALES DE UNA JORNADA ---
+export const obtenerKmTotalesJornada = async (jornadaId: number): Promise<number> => {
+  try {
+    const db = await getDB();
+    const puntosGPS = await db.getAllAsync('SELECT latitud, longitud FROM puntos_gps WHERE jornada_id = ? ORDER BY fecha ASC', [jornadaId]);
+    return calcularDistanciaTotalKm(puntosGPS || []);
+  } catch (e) {
+    console.error('obtenerKmTotalesJornada error:', e);
+    return 0;
+  }
+};
+
 export const insertarPausa = async (jornadaId: number, motivo: string, inicio: string, fin: string, duracion: number, direccion: string = '') => {
   try {
     const db = await getDB();
@@ -370,14 +446,38 @@ export const obtenerHistorialJornadas = async () => {
 export const obtenerDetalleJornada = async (id: number) => {
   try {
     const db = await getDB();
-    const jornada = await db.getFirstAsync('SELECT * FROM jornadas WHERE id = ?', [id]);
+    const jornada: any = await db.getFirstAsync('SELECT * FROM jornadas WHERE id = ?', [id]);
     const pausas = await db.getAllAsync('SELECT * FROM pausas WHERE jornada_id = ?', [id]);
     const incidencias = await db.getAllAsync('SELECT * FROM incidencias WHERE jornada_id = ?', [id]);
     const inspecciones = await db.getAllAsync('SELECT * FROM inspecciones WHERE jornada_id = ?', [id]);
-    return { jornada: jornada || null, pausas: pausas || [], incidencias: incidencias || [], inspecciones: inspecciones || [] };
+    
+    // --- NUEVA LÓGICA: OBTENER PUNTOS GPS Y CONVERTIR A GEOJSON ---
+    const puntosGPS = await db.getAllAsync('SELECT latitud, longitud, velocidad, fecha FROM puntos_gps WHERE jornada_id = ? ORDER BY fecha ASC', [id]);
+    
+    // Si la jornada está activa y no tiene ruta_geojson guardada, la generamos desde puntos_gps
+    let rutaGeojson = jornada?.ruta_geojson || null;
+    if (puntosGPS && puntosGPS.length > 0 && !rutaGeojson) {
+      rutaGeojson = JSON.stringify(puntosGPS);
+    }
+    
+    // Actualizamos la jornada con la ruta si está en activo
+    if (jornada && jornada.estatus === 'activo' && puntosGPS.length > 0 && !jornada.ruta_geojson) {
+      await db.runAsync('UPDATE jornadas SET ruta_geojson = ? WHERE id = ?', [rutaGeojson, id]);
+    }
+    
+    // Retornamos la jornada con los puntos GPS incluidos
+    const jornadaConRuta = jornada ? { ...jornada, ruta_geojson: rutaGeojson } : null;
+    
+    return { 
+      jornada: jornadaConRuta, 
+      pausas: pausas || [], 
+      incidencias: incidencias || [], 
+      inspecciones: inspecciones || [],
+      puntosGPS: puntosGPS || [] 
+    };
   } catch (e) {
     console.error('obtenerDetalleJornada error:', e);
-    return { jornada: null, pausas: [], incidencias: [], inspecciones: [] };
+    return { jornada: null, pausas: [], incidencias: [], inspecciones: [], puntosGPS: [] };
   }
 };
 
@@ -475,3 +575,133 @@ export const eliminarViaje = async (id: number) => {
     console.error("Error al eliminar viaje:", error);
   }
 };
+
+export const eliminarCuentaYDatosLocales = async () => {
+  let db: SQLite.SQLiteDatabase | null = null;
+  try {
+    db = await getDB();
+    await db.execAsync('BEGIN IMMEDIATE TRANSACTION;');
+
+    // Datos operativos
+    await db.runAsync('DELETE FROM puntos_gps');
+    await db.runAsync('DELETE FROM pausas');
+    await db.runAsync('DELETE FROM incidencias');
+    await db.runAsync('DELETE FROM inspecciones');
+    await db.runAsync('DELETE FROM jornadas');
+
+    // Perfil/documentos/cuenta local
+    await db.runAsync('DELETE FROM documentos');
+    await db.runAsync('DELETE FROM usuarios');
+
+    await db.execAsync('COMMIT;');
+    return true;
+  } catch (error) {
+    if (db) {
+      try { await db.execAsync('ROLLBACK;'); } catch (_) {}
+    }
+    console.error("Error al eliminar cuenta y datos locales:", error);
+    return false;
+  }
+};
+
+// ==========================================
+// FUNCIONES PARA VALIDACIÓN DE TIEMPOS SCT
+// ==========================================
+
+/**
+ * Obtiene las pausas registradas en una jornada
+ */
+export const obtenerPausasJornada = async (jornadaId: number): Promise<any[]> => {
+  try {
+    const db = await getDB();
+    const pausas = await db.getAllAsync('SELECT * FROM pausas WHERE jornada_id = ? ORDER BY inicio ASC', [jornadaId]);
+    return pausas || [];
+  } catch (e) {
+    console.error('obtenerPausasJornada error:', e);
+    return [];
+  }
+};
+
+/**
+ * Calcula el tiempo de conducción neto (descartando pausas)
+ * Retorna los minutos de conducción sin pausas
+ */
+export const calcularTiempoConduccionNeto = async (jornadaId: number, fechaInicio: string): Promise<number> => {
+  try {
+    const ahora = new Date();
+    const inicio = new Date(fechaInicio);
+    const tiempoTotalMs = ahora.getTime() - inicio.getTime();
+    let tiempoNetoBrutoMs = tiempoTotalMs;
+
+    // Obtener pausas y restar su duración
+    const pausas = await obtenerPausasJornada(jornadaId);
+    let tiempoPausasMs = 0;
+
+    for (const pausa of pausas) {
+      if (pausa.inicio && pausa.fin) {
+        const pausaInicio = new Date(pausa.inicio);
+        const pausaFin = new Date(pausa.fin);
+        tiempoPausasMs += pausaFin.getTime() - pausaInicio.getTime();
+      } else if (pausa.duracion) {
+        tiempoPausasMs += pausa.duracion * 1000;
+      }
+    }
+
+    // Tiempo de conducción = tiempo total - pausas
+    const tiempoNetoBrautoMs = tiempoTotalMs - tiempoPausasMs;
+    return Math.floor(tiempoNetoBrautoMs / (1000 * 60)); // Convertir a minutos
+  } catch (e) {
+    console.error('calcularTiempoConduccionNeto error:', e);
+    return 0;
+  }
+};
+
+/**
+ * Valida la conformidad con tiempos SCT
+ * Retorna un objeto con el estado y mensajes
+ */
+export const validarTiemposSCT = async (jornadaId: number, fechaInicio: string): Promise<{
+  tiempoConduccion: number;
+  estado: 'NORMAL' | 'ALERTA' | 'LIMITE';
+  mensaje: string;
+  minutosRestantes: number;
+}> => {
+  try {
+    const tiempoConduccionMinutos = await calcularTiempoConduccionNeto(jornadaId, fechaInicio);
+    const tiempoConduccionHoras = tiempoConduccionMinutos / 60;
+    
+    // SCT: máximo 9 horas de conducción continua sin descanso de 8 horas
+    const LIMITE_SCT_MINUTOS = 9 * 60; // 540 minutos
+    const ALERTA_SCT_MINUTOS = 8.5 * 60; // 510 minutos (alerta a 8h 30m)
+
+    let estado: 'NORMAL' | 'ALERTA' | 'LIMITE' = 'NORMAL';
+    let mensaje = `Conducción: ${tiempoConduccionHoras.toFixed(1)}h / 9h SCT`;
+    let minutosRestantes = LIMITE_SCT_MINUTOS - tiempoConduccionMinutos;
+
+    if (tiempoConduccionMinutos >= LIMITE_SCT_MINUTOS) {
+      estado = 'LIMITE';
+      mensaje = `❌ VIOLACIÓN SCT: ${tiempoConduccionHoras.toFixed(1)}h de conducción (Límite: 9h)`;
+      minutosRestantes = 0;
+    } else if (tiempoConduccionMinutos >= ALERTA_SCT_MINUTOS) {
+      estado = 'ALERTA';
+      mensaje = `⚠️ ALERTA SCT: Se acerca al límite de 9h (Actual: ${tiempoConduccionHoras.toFixed(1)}h)`;
+      minutosRestantes = LIMITE_SCT_MINUTOS - tiempoConduccionMinutos;
+    }
+
+    return {
+      tiempoConduccion: tiempoConduccionMinutos,
+      estado,
+      mensaje,
+      minutosRestantes
+    };
+  } catch (e) {
+    console.error('validarTiemposSCT error:', e);
+    return {
+      tiempoConduccion: 0,
+      estado: 'NORMAL',
+      mensaje: 'No se pudo validar tiempos SCT',
+      minutosRestantes: 540
+    };
+  }
+};
+

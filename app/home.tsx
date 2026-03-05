@@ -12,7 +12,7 @@ import Purchases from 'react-native-purchases';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 
 // FIREBASE
-import { collection, getDocs, query, limit, orderBy, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db_firestore } from '../src/services/firebaseConfig';
 
 const COLORS = {
@@ -32,14 +32,10 @@ export default function Home() {
   const router = useRouter();
   const [usuario, setUsuario] = useState<any>(null);
   const [esPremium, setEsPremium] = useState(false);
-  
-  const [riesgos, setRiesgos] = useState<number>(0);
-  const [loadingIntel, setLoadingIntel] = useState(true);
   const [loadingGPS, setLoadingGPS] = useState(false);
 
   useEffect(() => {
     cargarUsuario();
-    cargarInteligencia();
   }, []);
 
   useFocusEffect(
@@ -62,14 +58,6 @@ export default function Home() {
     if (user) setUsuario(JSON.parse(user));
   };
 
-  const cargarInteligencia = async () => {
-    try {
-        const q = query(collection(db_firestore, "zonas_riesgo"), orderBy("fecha", "desc"), limit(5));
-        const snapshot = await getDocs(q);
-        setRiesgos(snapshot.size);
-    } catch (e) { console.log("Offline"); } finally { setLoadingIntel(false); }
-  };
-
   const cerrarSesion = async () => {
     await AsyncStorage.removeItem('USER_SESSION');
     router.replace('/');
@@ -79,10 +67,13 @@ export default function Home() {
     try {
       const hoy = new Date().toISOString().split('T')[0]; 
       const ultimaInspeccion = await AsyncStorage.getItem('ULTIMA_INSPECCION');
+      
+      // SIN POPUP: Lo manda directo a la inspección si no la ha hecho hoy
       if (ultimaInspeccion !== hoy) {
-        Alert.alert("⚠️ Inspección Requerida", "Realiza tu revisión mecánica diaria antes de iniciar.", [{ text: "HACER INSPECCIÓN", onPress: () => router.push('/inspeccionVisual') }]);
+        router.push('/inspeccionVisual');
         return; 
       }
+      
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') router.push('/jornadaEnCurso');
     } catch (e) {}
@@ -102,7 +93,7 @@ export default function Home() {
           ubicacion: { lat: location.coords.latitude, long: location.coords.longitude },
           timestamp: Timestamp.now()
       });
-      Alert.alert("🚨 ENVIADA", "Central notificada.");
+      Alert.alert("🚨 ENVIADA");
     } catch (error) { Alert.alert("Error", "Llamar al 911."); } finally { setLoadingGPS(false); }
   };
 
@@ -127,15 +118,19 @@ export default function Home() {
 
       <ScrollView contentContainerStyle={{padding: 20, paddingBottom: 50}}>
         
-        <TouchableOpacity style={styles.intelCard} onPress={() => Linking.openURL('https://device-streaming-61499c4a.web.app/monitor.html')}>
-            <View style={{flexDirection:'row', justifyContent:'space-between'}}>
-                <Text style={styles.intelTitle}>CENTRO DE MONITOREO</Text>
-                <MaterialCommunityIcons name="radar" size={24} color={COLORS.primary} />
+        {/* --- BANNER PRO / PREMIUM --- */}
+        {!esPremium && (
+          <TouchableOpacity style={styles.bannerPro} onPress={() => router.push('/PantallaSuscripcion')}>
+            <View style={styles.bannerIconBox}>
+              <MaterialCommunityIcons name="star-shooting" size={24} color={COLORS.primary} />
             </View>
-            <View style={{marginTop: 10, flexDirection:'row', alignItems:'center'}}>
-                {!loadingIntel && <Text style={[styles.intelNumber, {color: riesgos > 0 ? COLORS.danger : COLORS.text}]}>{riesgos} <Text style={{fontSize:14}}>Zonas Activas</Text></Text>}
+            <View style={{ flex: 1, marginLeft: 15 }}>
+              <Text style={styles.bannerTitle}>Obtén la versión PRO</Text>
+              <Text style={styles.bannerDesc}>Genera PDFs oficiales para la Guardia Nacional y reportes sin límite.</Text>
             </View>
-        </TouchableOpacity>
+            <MaterialCommunityIcons name="chevron-right" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.grid}>
             <MenuCard title="Mi Jornada" icon="steering" color={COLORS.primary} onPress={handleIniciarJornada} />
@@ -183,15 +178,24 @@ const styles = StyleSheet.create({
   avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 15 },
   welcomeText: { color: COLORS.subtext, fontSize: 12 },
   userName: { color: COLORS.text, fontSize: 18, fontWeight: 'bold' },
-  intelCard: { backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: 16, padding: 15, marginBottom: 25, borderWidth: 1, borderColor: '#334155' },
-  intelTitle: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12 },
-  intelNumber: { fontSize: 24, fontWeight: 'bold', color: 'white' },
+  
+  /* ESTILOS DEL BANNER PRO */
+  bannerPro: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    padding: 15, borderRadius: 16, marginBottom: 25, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)'
+  },
+  bannerIconBox: { backgroundColor: 'rgba(245, 158, 11, 0.2)', padding: 10, borderRadius: 12 },
+  bannerTitle: { color: COLORS.primary, fontSize: 15, fontWeight: 'bold' },
+  bannerDesc: { color: COLORS.text, fontSize: 11, marginTop: 4, opacity: 0.9 },
+
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 },
   card: { width: '48%', backgroundColor: COLORS.card, borderRadius: 16, padding: 15, alignItems: 'center', marginBottom: 10 },
   iconBox: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   cardTitle: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  
   officialBtn: { backgroundColor: COLORS.danger, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 12, marginTop: 25 },
   officialBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 10 },
+  
   adContainer: { marginTop: 20, alignItems: 'center', width: '100%', minHeight: 60 },
   adLabel: { color: '#475569', fontSize: 8, marginBottom: 5, letterSpacing: 2 }
 });

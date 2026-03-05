@@ -1,9 +1,9 @@
 {
   "expo": {
     "name": "Bitacora57",
-    "slug": "Bitacora57",
+    "slug": "bitacora57",
     "scheme": "bitacora57",
-    "version": "3.0.0",
+    "version": "3.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,7 +15,7 @@
     },
     "android": {
       "package": "com.luisg0418.bitacora57",
-      "versionCode": 3,
+      "versionCode": 35,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -27,21 +27,32 @@
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION",
+        "com.google.android.gms.permission.AD_ID",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET",
+        "POST_NOTIFICATIONS"
       ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyD5yqF31xg4hiBZCqGnLZWH1KAgTZj-uA0"
-        }
-        
-      }
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.luisg0418.bitacora57"
     },
     "plugins": [
       "expo-router",
       "expo-sqlite",
       "@react-native-google-signin/google-signin",
+      [
+        "./plugins/withGoogleSignInScheme",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.363075260432-73vjlu0ukn1u59sjgf5dpi1mkunda880"
+        }
+      ],
+      "expo-notifications",
       [
         "react-native-google-mobile-ads",
         {
@@ -52,7 +63,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Permitir que Bitácora57 use tu ubicación en segundo plano para alertarte de zonas de riesgo durante tu ruta.",
+          "locationAlwaysAndWhenInUsePermission": "Permitir que Bitácora57 use tu ubicación en segundo plano para registrar tu ruta y jornada laboral (NOM-087).",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
@@ -63,16 +74,20 @@
           "RNMapboxMapsImpl": "mapbox",
           "RNMapboxMapsDownloadToken": "sk.eyJ1IjoibHVpc2cwNDE4IiwiYSI6ImNtaXhqOGpqNjA1NDIzZnByOWc0dG16aXQifQ.tNo8k-4i6yXCpdGwR2dl3Q"
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Permite acceder a tus fotos para subir documentos.",
+          "savePhotosPermission": "Permite guardar reportes en tu galería.",
+          "isAccessMediaLocationEnabled": true
+        }
       ]
     ],
     "extra": {
-      "router": {},
       "eas": {
-        "projectId": "cb800572-f34c-4856-bf37-078f5b4b7fda"
+        "projectId": "6d887387-1324-46c2-9889-67e10527ee6f"
       }
-    },
-    "ios": {
-      "bundleIdentifier": "com.luisg0418.bitacora57"
     }
   }
 }

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bitacora57 - Eliminacion de cuenta y datos</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #f59e0b;
+      --border: #334155;
+      --danger: #ef4444;
+      --ok: #10b981;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    h1, h2, h3 {
+      margin: 0 0 10px;
+      line-height: 1.25;
+    }
+    h1 { font-size: 28px; }
+    h2 { font-size: 20px; color: var(--accent); }
+    h3 { font-size: 16px; color: var(--accent); }
+    p, li {
+      color: var(--muted);
+      font-size: 15px;
+    }
+    ol, ul {
+      margin: 8px 0 0 22px;
+      padding: 0;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      margin-bottom: 8px;
+    }
+    .cta {
+      display: inline-block;
+      text-decoration: none;
+      background: var(--accent);
+      color: #111827;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-top: 8px;
+    }
+    .small {
+      font-size: 13px;
+    }
+    .warn {
+      color: var(--danger);
+      font-weight: 600;
+    }
+    .ok {
+      color: var(--ok);
+      font-weight: 600;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    a {
+      color: #60a5fa;
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <span class="pill">Bitacora57</span>
+      <h1>Solicitud de eliminacion de cuenta y datos asociados</h1>
+      <p>
+        Esta pagina pertenece a <strong>Bitacora57</strong> y explica como solicitar la eliminacion
+        de tu cuenta y de los datos asociados.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Como solicitar la eliminacion</h2>
+      <ol>
+        <li>
+          Desde la app: entra a <strong>Mi Perfil</strong> y pulsa <strong>ELIMINAR CUENTA Y DATOS</strong>.
+        </li>
+        <li>
+          Como alternativa, envia un correo a
+          <a href="mailto:soportebitacora57@gmail.com?subject=Solicitud%20de%20eliminacion%20de%20cuenta%20Bitacora57">
+            soportebitacora57@gmail.com
+          </a>
+          con el asunto: <span class="mono">Solicitud de eliminacion de cuenta Bitacora57</span>.
+        </li>
+        <li>
+          Incluye en el correo:
+          <ul>
+            <li>Nombre completo.</li>
+            <li>Correo de acceso usado en la app.</li>
+            <li>Numero de licencia (si aplica).</li>
+            <li>Numero telefonico de contacto (opcional).</li>
+          </ul>
+        </li>
+        <li>
+          Te responderemos para confirmar identidad y procesar la solicitud.
+        </li>
+      </ol>
+      <a class="cta" href="mailto:soportebitacora57@gmail.com?subject=Solicitud%20de%20eliminacion%20de%20cuenta%20Bitacora57">
+        Enviar solicitud por correo
+      </a>
+    </section>
+
+    <section class="card">
+      <h2>Que datos se eliminan</h2>
+      <ul>
+        <li>Cuenta de usuario y perfil (nombre, correo, licencia, empresa, foto de perfil).</li>
+        <li>Documentos cargados por el usuario (por ejemplo INE/licencia, fotos y PDF asociados).</li>
+        <li>Registros de jornadas y datos operativos vinculados a la cuenta (rutas, incidencias, reportes).</li>
+      </ul>
+      <p class="small">
+        <span class="warn">Importante:</span> los datos guardados localmente en tu dispositivo se eliminan al cerrar sesion,
+        borrar datos de la app o desinstalarla.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Retencion y tiempos</h2>
+      <ul>
+        <li><span class="ok">Plazo de atencion:</span> hasta 10 dias habiles para confirmar la solicitud.</li>
+        <li><span class="ok">Borrado principal:</span> dentro de 30 dias naturales despues de validar identidad.</li>
+        <li>
+          <span class="ok">Retencion limitada:</span> algunos registros minimos de auditoria/seguridad
+          pueden conservarse hasta 90 dias para cumplimiento legal y resolucion de incidencias.
+        </li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Contacto</h2>
+      <p>
+        Soporte Bitacora57: <a href="mailto:soportebitacora57@gmail.com">soportebitacora57@gmail.com</a>
+      </p>
+      <p class="small">Ultima actualizacion: 2026-02-28</p>
+    </section>
+  </main>
+</body>
+</html>

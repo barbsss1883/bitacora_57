@@ -37,13 +37,22 @@ export const generarPDF = async (
   const listaIncidencias = incidencias || [];
   const listaPuntos = puntosRastreo || [];
 
-  // --- 1. GENERACIÓN DE SELLO DIGITAL ROBUSTO (SHA1) ---
-  const cadenaOriginal = `B57|${jornada.id}|${jornada.operador || 'OP'}|${jornada.placas || 'PLACAS'}|${jornada.fecha_inicio}|${jornada.km_totales || 0}`;
-  const selloDigital = CryptoJS.SHA1(cadenaOriginal).toString().toUpperCase();
+  // --- 1. SELLO DIGITAL (SHA-256) CONSISTENTE CON VALIDACIÓN WEB ---
+  const idSello = Number(jornada.id_interno ?? jornada.id ?? 0);
+  const kmSello = Number(jornada.km_totales ?? jornada.km_calculados ?? 0) || 0;
+  const payloadSello = JSON.stringify({
+    id: idSello,
+    operador: jornada.operador || '',
+    unidad: jornada.unidad || '',
+    fecha_inicio: jornada.fecha_inicio || '',
+    km_totales: kmSello
+  });
+  const selloDigital = (jornada.sello_digital || CryptoJS.SHA256(payloadSello).toString()).toLowerCase();
 
   // --- 2. QR OFICIAL CON TU LINK REAL ---
-  const baseUrl = "https://device-streaming-61499c4a.web.app/validar.html";
-  const urlValidacion = `${baseUrl}?id=${jornada.id}`;
+  const baseUrl = "https://bitacora57.com/validar";
+  const idValidacion = jornada.id_interno ?? jornada.id;
+  const urlValidacion = `${baseUrl}?id=${idValidacion}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(urlValidacion)}`;
 
   const inicio = new Date(jornada.fecha_inicio).toLocaleString();
@@ -82,8 +91,20 @@ export const generarPDF = async (
   // --- D. HTML DE INSPECCIÓN VISUAL (CHECKLIST) ---
   let htmlInspeccion = '';
   if (inspeccion) {
-    const llavesIgnorar = ['fecha', 'hora', 'comentarios', 'id_jornada', 'firma'];
-    const puntosRevisados = Object.keys(inspeccion).filter(k => !llavesIgnorar.includes(k) && inspeccion[k] === true);
+    const checklistFuente = (inspeccion.items && typeof inspeccion.items === 'object')
+      ? inspeccion.items
+      : inspeccion;
+    const llavesIgnorar = ['fecha', 'hora', 'comentarios', 'id_jornada', 'firma', 'tipo', 'estatus', 'items'];
+    const puntosRevisados = Object.keys(checklistFuente || {}).filter(
+      (k) => !llavesIgnorar.includes(k) && checklistFuente[k] === true
+    );
+    const estadoInspeccion = inspeccion.estatus
+      || ((inspeccion.comentarios || '').trim().length > 5 ? 'CON OBSERVACIONES' : 'APROBADO');
+    const tipoInspeccion = inspeccion.tipo === 'fin'
+      ? 'LLEGADA'
+      : inspeccion.tipo === 'inicio'
+        ? 'SALIDA'
+        : (inspeccion.tipo || 'GENERAL').toUpperCase();
     
     const gridItems = puntosRevisados.map(k => `
       <div style="width: 32%; display: inline-block; margin-bottom: 4px; font-size: 9px;">
@@ -100,7 +121,8 @@ export const generarPDF = async (
         <div style="font-size:9px; margin-bottom:8px;">
           <strong>Fecha:</strong> ${inspeccion.fecha || '---'} &nbsp;|&nbsp; 
           <strong>Hora:</strong> ${inspeccion.hora || '---'} &nbsp;|&nbsp; 
-          <strong>Estado:</strong> APROBADO
+          <strong>Tipo:</strong> ${tipoInspeccion} &nbsp;|&nbsp;
+          <strong>Estado:</strong> ${estadoInspeccion}
         </div>
         <div style="display:flex; flex-wrap:wrap;">
           ${gridItems || 'Sin puntos marcados'}
@@ -224,7 +246,7 @@ export const generarPDF = async (
         </div>
 
         <div class="sello-digital">
-          <strong>CADENA ORIGINAL SHA1:</strong> ${selloDigital}
+          <strong>SELLO DIGITAL SHA-256:</strong> ${selloDigital}
         </div>
       </body>
     </html>

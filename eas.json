@@ -21,6 +21,9 @@
       "android": {
         "buildType": "app-bundle",
         "autoIncrement": true
+      },
+      "env": {
+        "ANDROID_HOME": "/home/luis/Android/Sdk"
       }
     }
   },

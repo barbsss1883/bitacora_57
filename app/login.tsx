@@ -23,10 +23,6 @@ const COLORS = {
   disabled: '#475569'
 };
 
-GoogleSignin.configure({
-  webClientId: "363075260432-v489o093cfoicld54u29be3p3p6l176a.apps.googleusercontent.com",
-  offlineAccess: true
-});
 
 export default function Login() {
   const router = useRouter();
@@ -38,6 +34,16 @@ export default function Login() {
 
   const [aceptoPrivacidad, setAceptoPrivacidad] = useState(false);
   const [showAviso, setShowAviso] = useState(false);
+
+  const validarPasswordRegistro = (pass: string) => {
+    if (pass.length < 8) return "Debe tener al menos 8 caracteres.";
+    if (!/[a-z]/.test(pass)) return "Debe incluir al menos una letra minúscula.";
+    if (!/[A-Z]/.test(pass)) return "Debe incluir al menos una letra mayúscula.";
+    if (!/[0-9]/.test(pass)) return "Debe incluir al menos un número.";
+    if (!/[^A-Za-z0-9]/.test(pass)) return "Debe incluir al menos un carácter especial (@$!%*#?&...).";
+    if (/\s/.test(pass)) return "No debe contener espacios.";
+    return null;
+  };
 
   const handleForgotPassword = async () => {
     if (!usuario) {
@@ -71,14 +77,20 @@ export default function Login() {
       return;
     }
 
-    if (!usuario || !password) {
+    const correoNormalizado = usuario.trim().toLowerCase();
+
+    if (!correoNormalizado || !password) {
       Alert.alert("Error", "Faltan datos. Por favor llena todos los campos.");
       return;
     }
 
     if (isRegistering) {
-      if (password.length < 6) {
-        Alert.alert("Contraseña Insegura", "La contraseña debe tener al menos 6 caracteres por seguridad.");
+      const errorPassword = validarPasswordRegistro(password);
+      if (errorPassword) {
+        Alert.alert(
+          "Contraseña Insegura",
+          `La contraseña no cumple la política de seguridad.\n\n${errorPassword}`
+        );
         return;
       }
       if (!nombre) {
@@ -90,14 +102,14 @@ export default function Login() {
     setLoading(true);
     try {
       if (isRegistering) {
-        const newId = await registrarUsuario(nombre, usuario, password);
+        const newId = await registrarUsuario(nombre, correoNormalizado, password);
         if (newId) {
           Alert.alert("Bienvenido", "Cuenta creada exitosamente. Ya puedes iniciar sesión.");
           setIsRegistering(false);
         }
         else Alert.alert("Error", "El usuario ya existe.");
       } else {
-        const user = await loginUsuario(usuario, password);
+        const user = await loginUsuario(correoNormalizado, password);
         if (user) {
           await AsyncStorage.setItem('USER_SESSION', JSON.stringify(user));
           router.replace('/home');
@@ -121,17 +133,39 @@ export default function Login() {
     try {
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
-      if (userInfo.data && userInfo.data.user) {
-        const dbUser = await loginConGoogle(userInfo.data.user);
-        if (dbUser) { await AsyncStorage.setItem('USER_SESSION', JSON.stringify(dbUser)); router.replace('/home'); }
+      console.log('google sign-in result', userInfo);
+
+      // Normalizamos cualquier forma en que Google devuelva el perfil
+      const perfil =
+        userInfo.data?.user ||
+        userInfo;
+
+      if (!perfil) {
+        Alert.alert("Error Google", "No se obtuvo información del usuario desde Google.");
+        return;
+      }
+
+      const dbUser = await loginConGoogle(perfil);
+      if (dbUser) {
+        await AsyncStorage.setItem('USER_SESSION', JSON.stringify(dbUser));
+        router.replace('/home');
+      } else {
+        Alert.alert("Error", "No se pudo iniciar sesión con la cuenta de Google.");
       }
     } catch (error: any) {
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) console.log("Cancelado");
-      else {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        console.log("Sign‑in cancelado por el usuario");
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        console.log("Sign‑in en progreso");
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert("Error Google", "Los servicios de Google Play no están disponibles o necesitan actualización.");
+      } else {
         console.error("Error Google:", error);
         Alert.alert("Error Google", "No se pudo conectar con Google. Verifica tu conexión.");
       }
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -160,7 +194,13 @@ export default function Login() {
 
             <View style={styles.inputContainer}><MaterialCommunityIcons name="email" size={20} color={COLORS.subtext} style={styles.icon} /><TextInput placeholder="Correo Electrónico" placeholderTextColor={COLORS.subtext} style={styles.input} value={usuario} onChangeText={setUsuario} keyboardType="email-address" autoCapitalize="none" /></View>
 
-            <View style={styles.inputContainer}><MaterialCommunityIcons name="lock" size={20} color={COLORS.subtext} style={styles.icon} /><TextInput placeholder="Contraseña (mín 6 caracteres)" placeholderTextColor={COLORS.subtext} style={styles.input} value={password} onChangeText={setPassword} secureTextEntry /></View>
+            <View style={styles.inputContainer}><MaterialCommunityIcons name="lock" size={20} color={COLORS.subtext} style={styles.icon} /><TextInput placeholder="Contraseña segura (mín 8, Aa1@)" placeholderTextColor={COLORS.subtext} style={styles.input} value={password} onChangeText={setPassword} secureTextEntry /></View>
+
+            {isRegistering && (
+              <Text style={{ color: COLORS.subtext, fontSize: 11, marginTop: -6, marginBottom: 10 }}>
+                Usa 8+ caracteres con mayúscula, minúscula, número y símbolo.
+              </Text>
+            )}
 
             {!isRegistering && (
               <TouchableOpacity onPress={handleForgotPassword} style={{ alignSelf: 'flex-end', marginBottom: 15, marginTop: -5 }}>
