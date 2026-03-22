@@ -17,7 +17,6 @@ const hashPassword = async (plainPassword: string) => {
   return `${PASSWORD_HASH_PREFIX}${digest}`;
 };
 
-// --- FUNCIÓN DE CONEXIÓN PRINCIPAL ---
 const getDB = async () => {
   if (cachedDb) return cachedDb;
   try {
@@ -33,9 +32,6 @@ const getDB = async () => {
   }
 };
 
-// ==========================================
-// 1. INICIALIZAR LA BASE DE DATOS
-// ==========================================
 export const initDatabase = async () => {
   try {
     const db = await getDB();
@@ -131,7 +127,7 @@ export const initDatabase = async () => {
       await db.execAsync(`ALTER TABLE pausas ADD COLUMN direccion TEXT;`);
       await db.execAsync(`ALTER TABLE incidencias ADD COLUMN direccion TEXT;`);
     } catch (e) {
-      // Ignoramos si ya existen
+    
     }
 
     console.log('BD Inicializada correctamente');
@@ -143,9 +139,6 @@ export const initDatabase = async () => {
   }
 };
 
-// ==========================================
-// SEGURIDAD: GENERACIÓN DE SELLO DIGITAL
-// ==========================================
 export const generarSelloDigital = async (id: number, fechaFin: string, operador: string, km: number) => {
   try {
     const dataString = `B57-${id}-${operador}-${fechaFin}-${km}`;
@@ -159,10 +152,6 @@ export const generarSelloDigital = async (id: number, fechaFin: string, operador
     return "ERROR_HASH";
   }
 };
-
-// ==========================================
-// FUNCIONES DE JORNADA
-// ==========================================
 
 export const iniciarNuevaJornada = async (datos: any) => {
   try {
@@ -198,7 +187,6 @@ export const finalizarJornada = async (id: number, firma: string, rutaGeoJson: s
     const jornada: any = await db.getFirstAsync('SELECT operador FROM jornadas WHERE id = ?', [id]);
     const operador = jornada?.operador || "Anonimo";
     
-    // --- SI NO HAY RUTA ENVIADA, LA GENERAMOS DESDE LOS PUNTOS GPS ---
     let rutaFinal = rutaGeoJson;
     if (!rutaFinal) {
       const puntosGPS = await db.getAllAsync('SELECT latitud, longitud, velocidad, fecha FROM puntos_gps WHERE jornada_id = ? ORDER BY fecha ASC', [id]);
@@ -242,7 +230,6 @@ export const loginUsuario = async (email: string, pass: string) => {
 
     if ((pass || '') !== passwordGuardada) return null;
 
-    // Migración transparente: si la contraseña estaba en texto plano, la convertimos a hash.
     const hashMigrado = await hashPassword(pass || '');
     await db.runAsync('UPDATE usuarios SET password = ? WHERE id = ?', [hashMigrado, row.id]);
     return row;
@@ -267,14 +254,12 @@ export const registrarUsuario = async (nombre: string, email: string, pass: stri
   }
 };
 
-// --- FUNCIÓN DE LOGIN GOOGLE MEJORADA Y ROBUSTA ---
 export const loginConGoogle = async (googleUser: any) => {
   try {
     console.log("RECIBIDO EN DB:", JSON.stringify(googleUser));
     
     const db = await getDB();
     
-    // Detectamos si los datos vienen anidados en 'user' o planos
     const datosUsuario = googleUser.user || googleUser; 
 
     const email = datosUsuario.email;
@@ -304,7 +289,6 @@ export const loginConGoogle = async (googleUser: any) => {
     return null;
   }
 };
-// ----------------------------------------------------
 
 export const obtenerDocumentosUsuario = async (usuarioId: number) => {
   try {
@@ -365,7 +349,6 @@ export const insertarPuntoGPS = async (jornadaId: number, lat: number, long: num
   }
 };
 
-// --- FUNCIÓN AUXILIAR: CALCULAR DISTANCIA TOTAL EN KM ---
 export const calcularDistanciaTotalKm = (puntos: any[]): number => {
   if (!puntos || puntos.length < 2) return 0;
   
@@ -391,7 +374,6 @@ export const calcularDistanciaTotalKm = (puntos: any[]): number => {
   return parseFloat(distanciaTotal.toFixed(2));
 };
 
-// --- FUNCIÓN AUXILIAR: OBTENER KM TOTALES DE UNA JORNADA ---
 export const obtenerKmTotalesJornada = async (jornadaId: number): Promise<number> => {
   try {
     const db = await getDB();
@@ -451,21 +433,17 @@ export const obtenerDetalleJornada = async (id: number) => {
     const incidencias = await db.getAllAsync('SELECT * FROM incidencias WHERE jornada_id = ?', [id]);
     const inspecciones = await db.getAllAsync('SELECT * FROM inspecciones WHERE jornada_id = ?', [id]);
     
-    // --- NUEVA LÓGICA: OBTENER PUNTOS GPS Y CONVERTIR A GEOJSON ---
     const puntosGPS = await db.getAllAsync('SELECT latitud, longitud, velocidad, fecha FROM puntos_gps WHERE jornada_id = ? ORDER BY fecha ASC', [id]);
     
-    // Si la jornada está activa y no tiene ruta_geojson guardada, la generamos desde puntos_gps
     let rutaGeojson = jornada?.ruta_geojson || null;
     if (puntosGPS && puntosGPS.length > 0 && !rutaGeojson) {
       rutaGeojson = JSON.stringify(puntosGPS);
     }
     
-    // Actualizamos la jornada con la ruta si está en activo
     if (jornada && jornada.estatus === 'activo' && puntosGPS.length > 0 && !jornada.ruta_geojson) {
       await db.runAsync('UPDATE jornadas SET ruta_geojson = ? WHERE id = ?', [rutaGeojson, id]);
     }
     
-    // Retornamos la jornada con los puntos GPS incluidos
     const jornadaConRuta = jornada ? { ...jornada, ruta_geojson: rutaGeojson } : null;
     
     return { 
@@ -546,10 +524,6 @@ export const vincularInspeccionAViaje = async (nuevoJornadaId: number) => {
   }
 };
 
-// ==========================================
-// NUEVAS FUNCIONES CORREGIDAS PARA HISTORIAL
-// ==========================================
-
 export const obtenerJornadas = async () => {
   try {
     const db = await getDB();
@@ -564,7 +538,6 @@ export const obtenerJornadas = async () => {
 export const eliminarViaje = async (id: number) => {
   try {
     const db = await getDB();
-    // Usamos runAsync y el nombre correcto de columna 'jornada_id'
     await db.runAsync('DELETE FROM jornadas WHERE id = ?', [id]);
     await db.runAsync('DELETE FROM pausas WHERE jornada_id = ?', [id]);
     await db.runAsync('DELETE FROM incidencias WHERE jornada_id = ?', [id]);
@@ -582,14 +555,12 @@ export const eliminarCuentaYDatosLocales = async () => {
     db = await getDB();
     await db.execAsync('BEGIN IMMEDIATE TRANSACTION;');
 
-    // Datos operativos
     await db.runAsync('DELETE FROM puntos_gps');
     await db.runAsync('DELETE FROM pausas');
     await db.runAsync('DELETE FROM incidencias');
     await db.runAsync('DELETE FROM inspecciones');
     await db.runAsync('DELETE FROM jornadas');
 
-    // Perfil/documentos/cuenta local
     await db.runAsync('DELETE FROM documentos');
     await db.runAsync('DELETE FROM usuarios');
 
@@ -604,13 +575,6 @@ export const eliminarCuentaYDatosLocales = async () => {
   }
 };
 
-// ==========================================
-// FUNCIONES PARA VALIDACIÓN DE TIEMPOS SCT
-// ==========================================
-
-/**
- * Obtiene las pausas registradas en una jornada
- */
 export const obtenerPausasJornada = async (jornadaId: number): Promise<any[]> => {
   try {
     const db = await getDB();
@@ -622,10 +586,6 @@ export const obtenerPausasJornada = async (jornadaId: number): Promise<any[]> =>
   }
 };
 
-/**
- * Calcula el tiempo de conducción neto (descartando pausas)
- * Retorna los minutos de conducción sin pausas
- */
 export const calcularTiempoConduccionNeto = async (jornadaId: number, fechaInicio: string): Promise<number> => {
   try {
     const ahora = new Date();
@@ -633,7 +593,6 @@ export const calcularTiempoConduccionNeto = async (jornadaId: number, fechaInici
     const tiempoTotalMs = ahora.getTime() - inicio.getTime();
     let tiempoNetoBrutoMs = tiempoTotalMs;
 
-    // Obtener pausas y restar su duración
     const pausas = await obtenerPausasJornada(jornadaId);
     let tiempoPausasMs = 0;
 
@@ -647,19 +606,14 @@ export const calcularTiempoConduccionNeto = async (jornadaId: number, fechaInici
       }
     }
 
-    // Tiempo de conducción = tiempo total - pausas
     const tiempoNetoBrautoMs = tiempoTotalMs - tiempoPausasMs;
-    return Math.floor(tiempoNetoBrautoMs / (1000 * 60)); // Convertir a minutos
+    return Math.floor(tiempoNetoBrautoMs / (1000 * 60)); 
   } catch (e) {
     console.error('calcularTiempoConduccionNeto error:', e);
     return 0;
   }
 };
 
-/**
- * Valida la conformidad con tiempos SCT
- * Retorna un objeto con el estado y mensajes
- */
 export const validarTiemposSCT = async (jornadaId: number, fechaInicio: string): Promise<{
   tiempoConduccion: number;
   estado: 'NORMAL' | 'ALERTA' | 'LIMITE';
@@ -670,7 +624,6 @@ export const validarTiemposSCT = async (jornadaId: number, fechaInicio: string):
     const tiempoConduccionMinutos = await calcularTiempoConduccionNeto(jornadaId, fechaInicio);
     const tiempoConduccionHoras = tiempoConduccionMinutos / 60;
     
-    // SCT: máximo 9 horas de conducción continua sin descanso de 8 horas
     const LIMITE_SCT_MINUTOS = 9 * 60; // 540 minutos
     const ALERTA_SCT_MINUTOS = 8.5 * 60; // 510 minutos (alerta a 8h 30m)
 

@@ -1,10 +1,9 @@
-// components/MonitorFatiga.tsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 
 interface MonitorFatigaProps {
   jornadaActiva: boolean;
-  fechaInicio: string | null; // Formato ISO string
+  fechaInicio: string | null; 
 }
 
 const LIMITE_HORAS = 5;
@@ -22,8 +21,6 @@ export default function MonitorFatiga({ jornadaActiva, fechaInicio }: MonitorFat
         const inicio = new Date(fechaInicio);
         const diff = Math.floor((ahora.getTime() - inicio.getTime()) / 1000);
         setSegundos(diff);
-
-        // Alerta preventiva (15 mins antes)
         if (diff === SEGUNDOS_LIMITE - 900) {
            Alert.alert("⚠️ Aviso de NOM-087", "Te quedan 15 minutos para tu descanso obligatorio.");
         }
@@ -52,7 +49,7 @@ export default function MonitorFatiga({ jornadaActiva, fechaInicio }: MonitorFat
 
 const styles = StyleSheet.create({
   container: { padding: 15, backgroundColor: '#2C3E50', borderRadius: 8, alignItems: 'center', marginVertical: 10 },
-  containerCritico: { backgroundColor: '#C0392B' }, // Rojo fuerte si se pasa
+  containerCritico: { backgroundColor: '#C0392B' },
   label: { color: '#BDC3C7', fontSize: 14, textTransform: 'uppercase' },
   timer: { color: '#ECF0F1', fontSize: 42, fontWeight: 'bold', fontFamily: 'monospace' },
   alerta: { color: '#FFF', fontWeight: 'bold', marginTop: 5 }

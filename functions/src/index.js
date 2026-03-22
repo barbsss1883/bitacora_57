@@ -13,12 +13,11 @@ const transporter = nodemailer.createTransport({
 });
 
 exports.enviarBienvenidaB2B = functions.https.onCall(async (data, context) => {
-    // Si ves este mensaje en los logs, ya ganamos
+    
     console.log("🚀 VERSIÓN JS PURA CARGADA - Datos:", data);
 
     const { email, password, empresa } = data;
 
-    // Mensajes de error NUEVOS y ESPECÍFICOS
     if (!email) throw new functions.https.HttpsError('invalid-argument', '❌ Falta el EMAIL');
     if (!password) throw new functions.https.HttpsError('invalid-argument', '❌ Falta la PASSWORD');
     if (!empresa) throw new functions.https.HttpsError('invalid-argument', '❌ Falta la EMPRESA');

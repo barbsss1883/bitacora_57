@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-// 1. IMPORTAMOS LAS HERRAMIENTAS DE PERSISTENCIA
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getStorage } from 'firebase/storage';
@@ -21,7 +20,6 @@ const app = initializeApp(firebaseConfig);
 
 export const db_firestore = getFirestore(app);
 
-// 2. CONFIGURAMOS AUTH CON PERSISTENCIA NATIVA
 export const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(ReactNativeAsyncStorage)
 });

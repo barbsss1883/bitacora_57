@@ -7,11 +7,10 @@ import Purchases, { PurchasesPackage } from 'react-native-purchases';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-// --- COLORES DE TU MARCA (Bitacora57) ---
 const COLORS = {
   bg: '#0f172a',
   card: '#1e293b',
-  primary: '#f59e0b', // Naranja Principal
+  primary: '#f59e0b', 
   text: '#f8fafc',
   subtext: '#94a3b8',
   success: '#10b981',
@@ -20,7 +19,6 @@ const COLORS = {
   danger: '#ef4444'
 };
 
-// 🔥 TU LLAVE DE REVENUECAT LISTA
 const API_KEY = 'goog_DzTkRNvkOzigskDvblAaBCgMPQl'; 
 
 export default function PantallaSuscripcion() {
@@ -33,16 +31,12 @@ export default function PantallaSuscripcion() {
   useEffect(() => {
     const setup = async () => {
       try {
-        // Inicializamos RevenueCat con tu llave de prueba
         await Purchases.configure({ apiKey: API_KEY });
         
-        // Obtenemos las ofertas
         const offerings = await Purchases.getOfferings();
         
         if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
           setPackages(offerings.current.availablePackages);
-          
-          // Estrategia: Pre-seleccionar el ANUAL
           const anual = offerings.current.availablePackages.find(p => p.packageType === 'ANNUAL');
           if (anual) {
              setSelectedPkg(anual);
@@ -64,8 +58,6 @@ export default function PantallaSuscripcion() {
     setCargando(true);
     try {
       const { customerInfo } = await Purchases.purchasePackage(selectedPkg);
-      
-      // Verificamos si se desbloqueó el nivel "pro"
       if (typeof customerInfo.entitlements.active['pro'] !== "undefined") {
         Alert.alert("¡Bienvenido a PRO!", "Tu suscripción está activa. Disfruta de Bitacora57 sin límites.");
         router.back(); 
@@ -100,7 +92,6 @@ export default function PantallaSuscripcion() {
       router.back();
   };
 
-  // Renderizado de tarjetas de precio
   const renderOption = (pkg: PurchasesPackage) => {
     const isSelected = selectedPkg?.identifier === pkg.identifier;
     const isAnnual = pkg.packageType === 'ANNUAL';
@@ -178,7 +169,6 @@ export default function PantallaSuscripcion() {
              {packages.map(renderOption)}
              {packages.length === 0 && (
                  <Text style={{color:COLORS.danger, textAlign:'center'}}>
-                     {/* Este mensaje saldrá si aún no se propagan los productos en Google Play */}
                      Configurando precios... Intenta más tarde.
                  </Text>
              )}

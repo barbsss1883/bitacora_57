@@ -19,7 +19,6 @@ const COLORS = {
 export default function CalculadoraDiesel() {
   const router = useRouter();
 
-  // 📥 Entradas basadas en tu algoritmo
   const [form, setForm] = useState({
     km: '',               // kilometros
     inicial: '',          // capacidadTanques (o litros al inicio)
@@ -31,30 +30,25 @@ export default function CalculadoraDiesel() {
   const [resultado, setResultado] = useState<any>(null);
 
   const calcular = () => {
-    // 🧠 Inicialización y validación
     if (!form.km || !form.inicial || !form.finales) {
       Alert.alert("Faltan Datos", "Necesitamos KM, Iniciales y Finales para el balance.");
       return;
     }
 
     const kilometros = parseFloat(form.km);
-    const capacidadTanques = parseFloat(form.inicial); // Lo tomamos como el inicial real
+    const capacidadTanques = parseFloat(form.inicial); 
     const litrosCargadosRuta = parseFloat(form.recargas) || 0;
     const litrosFinales = parseFloat(form.finales);
     const litrosRelanti = parseFloat(form.ralenti) || 0;
 
-    // Validaciones de tu lógica
     if (kilometros <= 0) { Alert.alert("Error", "Los KM deben ser mayor a 0"); return; }
     if (capacidadTanques <= 0) { Alert.alert("Error", "Litros iniciales incorrectos"); return; }
     if (litrosFinales < 0) { Alert.alert("Error", "Litros finales no pueden ser negativos"); return; }
-
-    // ⚙️ CÁLCULOS PRINCIPALES (Tu Algoritmo)
 
     // 1️⃣ Litros disponibles totales
     const litrosDisponibles = capacidadTanques + litrosCargadosRuta;
 
     // 2️⃣ Consumo total real (Balance de Masas)
-    // Lo que tenía + Lo que eché - Lo que me sobró = Lo que quemó el motor
     const consumoTotal = litrosDisponibles - litrosFinales;
 
     if (consumoTotal <= 0) {
@@ -62,22 +56,14 @@ export default function CalculadoraDiesel() {
       return;
     }
 
-    // 3️⃣ Consumo en manejo
     let consumoManejo = consumoTotal - litrosRelanti;
     if (consumoManejo < 0) consumoManejo = 0;
 
-    // 4️⃣ Rendimiento del vehículo
-    // Tu lógica dice: L/km (consumoManejo / kilometros)
-    // PERO para el chofer mostramos km/L (kilometros / consumoManejo) que es el estándar
     const rendimientoKmPorL = consumoManejo > 0 ? (kilometros / consumoManejo) : 0;
-    
-    // (Opcional) El dato técnico L/km de tu algoritmo
     const consumoTecnico = consumoManejo / kilometros; 
 
-    // 5️⃣ Diferencia de control (Auditoría interna del algoritmo)
     const diferencia = litrosDisponibles - (consumoTotal + litrosFinales);
 
-    // 📤 Salida
     setResultado({
       consumoTotal: consumoTotal.toFixed(0),
       consumoManejo: consumoManejo.toFixed(0),
@@ -219,7 +205,6 @@ const styles = StyleSheet.create({
   btnOutline: { flex:0.4, borderWidth:1, borderColor: COLORS.border, padding: 15, borderRadius: 10, alignItems: 'center' },
   btnText: { fontWeight: 'bold', color: '#000' },
 
-  // RESULTADOS
   resultCard: { margin: 20, marginBottom: 0, padding: 20, backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.success },
   resultTitle: { color: COLORS.success, textAlign:'center', fontWeight:'bold', marginBottom: 15, fontSize: 14, letterSpacing: 1 },
   labelSmall: { color: COLORS.subtext, fontSize: 10, marginBottom: 5, fontWeight: 'bold' },

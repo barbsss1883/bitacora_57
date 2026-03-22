@@ -8,12 +8,9 @@ export default function Layout() {
   const [dbLista, setDbLista] = useState(false);
 
   useEffect(() => {
-    // configuración de Google Signin centralizada
     GoogleSignin.configure({
       webClientId:"363075260432-73vjlu0ukn1u59sjgf5dpi1mkunda880.apps.googleusercontent.com",
     });
-
-    // Iniciamos la BD y esperamos a que termine
     initDatabase()
       .then(() => {
         console.log("--- BASE DE DATOS LISTA ---");
@@ -24,8 +21,7 @@ export default function Layout() {
         setDbLista(true); 
       });
   }, []);
-
-  // MIENTRAS CARGA LA BD, MOSTRAMOS PANTALLA NEGRA CON SPINNER
+  
   if (!dbLista) {
     return (
       <View style={{flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center'}}>
@@ -41,7 +37,6 @@ export default function Layout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="home" />
-        {/* AGREGADO: Registramos perfil para evitar error de ruta */}
         <Stack.Screen name="perfil" />
       </Stack>
     </>

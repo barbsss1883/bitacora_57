@@ -12,6 +12,7 @@ import Purchases from 'react-native-purchases'; // <--- INTEGRACIÓN REVENUECAT
 // BD y Servicios
 import { obtenerJornadas, eliminarViaje, obtenerDetalleJornada } from '../db/database'; 
 import { generarPDF } from '../src/services/PdfGenerator';
+import { extraerCoordenadaLngLat, extraerFechaPuntoISO, normalizarRutaCoordenadas, parseRutaPuntos } from '../utils/routeUtils';
 
 const COLORS = {
   bg: '#0f172a',
@@ -51,9 +52,37 @@ export default function Historial() {
     }
   };
 
-  const abrirDetalle = (item: any) => {
+  const abrirDetalle = async (item: any) => {
     setItemSeleccionado(item);
     setModalVisible(true);
+
+    try {
+      const detalle = await obtenerDetalleJornada(Number(item.id));
+      const jornadaDetalle = detalle?.jornada ? { ...item, ...detalle.jornada } : { ...item };
+
+      const rutaActual = normalizarRutaCoordenadas(jornadaDetalle?.ruta_geojson);
+      if (rutaActual.length === 0) {
+        const [jornadaActivaId, rutaCache] = await Promise.all([
+          AsyncStorage.getItem('CURRENT_JORNADA_ID'),
+          AsyncStorage.getItem('RUTA_OFFLINE_CACHE'),
+        ]);
+
+        if (
+          jornadaActivaId &&
+          Number(jornadaActivaId) === Number(item.id) &&
+          rutaCache &&
+          normalizarRutaCoordenadas(rutaCache).length > 0
+        ) {
+          jornadaDetalle.ruta_geojson = rutaCache;
+        }
+      }
+
+      setItemSeleccionado((actual: any) => (
+        actual && Number(actual.id) === Number(item.id) ? jornadaDetalle : actual
+      ));
+    } catch (e) {
+      console.log('No se pudo cargar detalle completo del viaje', e);
+    }
   };
 
   // --- LÓGICA DE ELIMINAR ---
@@ -171,23 +200,21 @@ export default function Historial() {
         // Reconstruir puntos de rastreo para el PDF
         let puntosRastreo = [];
         if (itemSeleccionado.ruta_geojson) {
-             try {
-                const coords = JSON.parse(itemSeleccionado.ruta_geojson);
-                // Muestreo para no saturar el PDF
-                if (Array.isArray(coords)) {
-                    const paso = Math.max(1, Math.floor(coords.length / 10));
-                    for (let i = 0; i < coords.length; i += paso) {
-                        if(coords[i] && coords[i].latitude && coords[i].longitude) {
-                            puntosRastreo.push({
-                                tipo: 'RASTREO',
-                                hora: new Date(coords[i].timestamp || Date.now()).toISOString(),
-                                ubicacion: `${coords[i].latitude.toFixed(4)}, ${coords[i].longitude.toFixed(4)}`,
-                                detalle: 'Historial GPS'
-                            });
-                        }
-                    }
+             const puntosRuta = parseRutaPuntos(itemSeleccionado.ruta_geojson);
+             if (Array.isArray(puntosRuta) && puntosRuta.length > 0) {
+                const paso = Math.max(1, Math.floor(puntosRuta.length / 10));
+                for (let i = 0; i < puntosRuta.length; i += paso) {
+                    const coord = extraerCoordenadaLngLat(puntosRuta[i]);
+                    if (!coord) continue;
+
+                    puntosRastreo.push({
+                        tipo: 'RASTREO',
+                        hora: extraerFechaPuntoISO(puntosRuta[i]),
+                        ubicacion: `${coord[1].toFixed(4)}, ${coord[0].toFixed(4)}`,
+                        detalle: 'Historial GPS'
+                    });
                 }
-             } catch(e) { console.log("Error parseando ruta para PDF", e); }
+             }
         }
 
         await generarPDF(
@@ -234,19 +261,10 @@ export default function Historial() {
     </TouchableOpacity>
   );
 
-  const MapaHistorial = ({ rutaJson }: { rutaJson: string }) => {
+  const MapaHistorial = ({ rutaJson }: { rutaJson: unknown }) => {
       if (!rutaJson) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Sin datos de ruta</Text></View>;
       
-      let coordenadas: number[][] = [];
-      try {
-          const parsed = JSON.parse(rutaJson);
-          if (!Array.isArray(parsed)) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Error de datos</Text></View>;
-
-          coordenadas = parsed
-            .filter((p: any) => p && !isNaN(parseFloat(p.latitude)) && !isNaN(parseFloat(p.longitude)))
-            .map((p: any) => [parseFloat(p.longitude), parseFloat(p.latitude)]);
-
-      } catch (e) { return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Error al leer mapa</Text></View>; }
+      const coordenadas = normalizarRutaCoordenadas(rutaJson);
 
       if (coordenadas.length === 0) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Ruta vacía o inválida</Text></View>;
 
@@ -371,7 +389,7 @@ export default function Historial() {
             
             <ScrollView contentContainerStyle={{padding: 20}}>
                 <Text style={styles.sectionTitle}>Ruta Recorrida</Text>
-                {itemSeleccionado?.ruta_geojson ? (
+                {normalizarRutaCoordenadas(itemSeleccionado?.ruta_geojson).length > 0 ? (
                     <MapaHistorial rutaJson={itemSeleccionado.ruta_geojson} />
                 ) : (
                     <View style={[styles.mapContainer, {justifyContent:'center', alignItems:'center'}]}>

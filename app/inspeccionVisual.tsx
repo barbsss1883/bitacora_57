@@ -6,8 +6,6 @@ import {
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-// COMPONENTES Y BD
 import FirmaDigital from '../src/components/FirmaDigital';
 import { guardarInspeccion } from '../db/database';
 
@@ -17,7 +15,6 @@ const COLORS = {
   border: '#334155', white: '#ffffff', skeleton: '#334155'
 };
 
-// --- COMPONENTE SKELETON (Carga Fantasma) ---
 const Skeleton = ({ width, height, style }: any) => {
   const opacity = useRef(new Animated.Value(0.3)).current;
   useEffect(() => {
@@ -32,20 +29,16 @@ const Skeleton = ({ width, height, style }: any) => {
 };
 
 const PUNTOS_REVISION = [
-  // Grupo 1: Seguridad Crítica
   { id: 'frenos', label: '1. Frenos / Aire', icon: 'car-brake-abs' },
   { id: 'luces', label: '2. Luces / Faros', icon: 'car-light-high' },
   { id: 'llantas', label: '3. Llantas / Rines', icon: 'tire' },
   { id: 'direccion', label: '4. Dirección', icon: 'steering' },
-  // Grupo 2: Visibilidad y Cabina
   { id: 'parabrisas', label: '5. Parabrisas', icon: 'wiper' },
   { id: 'espejos', label: '6. Espejos', icon: 'car-mirror' },
   { id: 'claxon', label: '7. Claxon', icon: 'bullhorn' },
-  // Grupo 3: Motor y Fluidos
   { id: 'niveles', label: '8. Niveles (Aceite)', icon: 'oil' },
   { id: 'combustible', label: '9. Tanques Diesel', icon: 'gas-station' },
   { id: 'escape', label: '10. Sist. Escape', icon: 'smog' },
-  // Grupo 4: Complementarios
   { id: 'acoplamiento', label: '11. 5ta Rueda', icon: 'link-variant' },
   { id: 'seguridad', label: '12. Extintor/Triang', icon: 'fire-extinguisher' },
   { id: 'documentos', label: '13. Documentos', icon: 'file-document-outline' },
@@ -54,7 +47,7 @@ const PUNTOS_REVISION = [
 export default function InspeccionVisual() {
   const router = useRouter();
   
-  const [cargando, setCargando] = useState(true); // Para el Skeleton inicial
+  const [cargando, setCargando] = useState(true); 
   const [jornadaId, setJornadaId] = useState<number | null>(null);
   const [tipo, setTipo] = useState('inicio'); 
   const [checklist, setChecklist] = useState<any>({});
@@ -64,7 +57,6 @@ export default function InspeccionVisual() {
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    // Simulación de carga rápida para efecto visual
     setTimeout(() => setCargando(false), 600);
     
     const checkJornada = async () => {
@@ -96,7 +88,6 @@ export default function InspeccionVisual() {
         const hoy = new Date().toISOString().split('T')[0];
         const hora = new Date().toLocaleTimeString();
 
-        // 1. BD Local
         await guardarInspeccion(
             jornadaId || 0,
             tipo === 'inicio' ? 'SALIDA (NOM-068)' : 'LLEGADA (NOM-068)',
@@ -105,7 +96,6 @@ export default function InspeccionVisual() {
             firmaBase64
         );
 
-        // 2. CONEXIÓN CON PDF (El Puente Mágico)
         await AsyncStorage.setItem('ULTIMA_INSPECCION', hoy);
         
         const datosParaPDF = {
@@ -116,7 +106,6 @@ export default function InspeccionVisual() {
         };
         await AsyncStorage.setItem(`INSPECCION_${hoy}`, JSON.stringify(datosParaPDF));
 
-        // Éxito
         Alert.alert("Inspección Registrada", "Unidad validada correctamente.");
         router.back();
 
@@ -127,7 +116,6 @@ export default function InspeccionVisual() {
     }
   };
 
-  // --- MODO FANTASMA: SKELETON SCREEN ---
   if (cargando) {
       return (
         <View style={styles.container}>
@@ -160,7 +148,6 @@ export default function InspeccionVisual() {
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         
-        {/* TIPO DE INSPECCIÓN (Tabs) */}
         <View style={styles.selectorContainer}>
             <TouchableOpacity 
                 style={[styles.selectorBtn, tipo === 'inicio' && {backgroundColor: COLORS.primary}]} 
@@ -202,7 +189,6 @@ export default function InspeccionVisual() {
             })}
         </View>
 
-        {/* COMENTARIOS */}
         <View style={styles.commentBox}>
             <Text style={styles.label}>Observaciones / Daños:</Text>
             <TextInput 
@@ -215,22 +201,19 @@ export default function InspeccionVisual() {
             />
         </View>
 
-        {/* BOTÓN GUARDAR */}
         <TouchableOpacity style={styles.saveBtn} onPress={solicitarFirma}>
             <Text style={styles.saveBtnText}>{guardando ? "GUARDANDO..." : "FIRMAR Y GUARDAR"}</Text>
             {!guardando && <MaterialCommunityIcons name="draw" size={20} color={COLORS.bg} />}
         </TouchableOpacity>
 
       </ScrollView>
-
-      {/* MODAL DE FIRMA */}
+      
       <Modal visible={modalFirma} animationType="slide">
           <View style={{flex:1, backgroundColor: COLORS.bg}}>
               <FirmaDigital onOK={finalizarGuardado} onCancel={() => setModalFirma(false)} />
           </View>
       </Modal>
       
-      {/* OVERLAY DE GUARDADO (Mejor que Spinner) */}
       {guardando && (
           <View style={StyleSheet.absoluteFillObject}>
               <View style={{flex:1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent:'center', alignItems:'center'}}>

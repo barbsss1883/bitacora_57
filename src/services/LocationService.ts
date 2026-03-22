@@ -14,22 +14,21 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   }
   if (data) {
     const { locations } = data as { locations: Location.LocationObject[] };
-    const location = locations[0]; // Tomamos la más reciente
+    const location = locations[0]; 
 
     if (location) {
       try {
-        // 1. Recuperamos el ID de la jornada actual desde el almacenamiento
+
         const jornadaIdStr = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
         
         if (jornadaIdStr) {
           const jornadaId = parseInt(jornadaIdStr, 10);
           
-          // 2. Guardamos en SQLite usando tu función existente
           await insertarPuntoGPS(
             jornadaId,
             location.coords.latitude,
             location.coords.longitude,
-            location.coords.speed || 0 // Si la velocidad es null, ponemos 0
+            location.coords.speed || 0 
           );
           
           console.log(`📍 Guardado: ID ${jornadaId} - [${location.coords.latitude}, ${location.coords.longitude}]`);
@@ -90,8 +89,8 @@ export const iniciarRastreoBackground = async (): Promise<ResultadoRastreo> => {
   try {
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
       accuracy: Location.Accuracy.Balanced,
-      distanceInterval: 500, // 500 metros
-      timeInterval: 10000,   // 10 segundos
+      distanceInterval: 500, 
+      timeInterval: 10000,   
       deferredUpdatesInterval: 5000,
       foregroundService: {
         notificationTitle: "Bitácora57",
@@ -118,17 +117,10 @@ export const detenerRastreo = async () => {
   }
 };
 
-/**
- * NUEVA FUNCIÓN: GEOCODIFICACIÓN INVERSA
- * Convierte coordenadas (lat, long) en una dirección legible (Calle, Ciudad, Estado).
- * Si no se pasan argumentos, usa la ubicación actual del dispositivo.
- */
 export const obtenerDireccion = async (lat?: number, long?: number): Promise<string> => {
   try {
     let latitude = lat;
     let longitude = long;
-
-    // Si no se proveen coordenadas, obtenemos la posición actual (Foregound)
     if (!latitude || !longitude) {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return "Ubicación no disponible (Permiso denegado)";
@@ -138,27 +130,21 @@ export const obtenerDireccion = async (lat?: number, long?: number): Promise<str
       longitude = currentLoc.coords.longitude;
     }
 
-    // Usamos el servicio nativo de Expo para Reverse Geocoding
     const direcciones = await Location.reverseGeocodeAsync({ latitude, longitude });
 
     if (direcciones.length > 0) {
       const d = direcciones[0];
-      // Construimos una cadena limpia evitando valores nulos
       const calle = d.street || d.name || '';
       const numero = d.streetNumber ? `#${d.streetNumber}` : '';
       const colonia = d.district || d.subregion || '';
       const ciudad = d.city || d.region || '';
       const estado = d.region || '';
-      
-      // Formato preferido: "Calle #123, Colonia, Ciudad"
-      // Filtramos partes vacías para que no queden comas sueltas
       const partes = [
         `${calle} ${numero}`.trim(),
         colonia,
-        ciudad !== colonia ? ciudad : null, // Evitar duplicados si ciudad y distrito son iguales
+        ciudad !== colonia ? ciudad : null, 
         estado !== ciudad ? estado : null
       ].filter(Boolean);
-
       return partes.join(', ') || `Coordenadas: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     }
 
@@ -166,16 +152,10 @@ export const obtenerDireccion = async (lat?: number, long?: number): Promise<str
 
   } catch (error) {
     console.warn("Error obteniendo dirección:", error);
-    // En caso de error (sin internet, etc.), devolvemos las coordenadas como respaldo
     return lat ? `${lat.toFixed(5)}, ${long.toFixed(5)}` : "Ubicación desconocida";
   }
 };
 
-// ==============================================
-// NOTIFICACIONES DEL TEMPORIZADOR
-// ==============================================
-
-// Configurar el canal de notificación (Android)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -200,15 +180,11 @@ export const solicitarPermisosNotificacion = async (): Promise<boolean> => {
 
 export const iniciarNotificacionTemporizador = async (): Promise<void> => {
   try {
-    // Solicitar permisos
     await solicitarPermisosNotificacion();
-    
-    // Detener si ya hay un intervalo activo
     if (timerNotificationInterval) {
       clearInterval(timerNotificationInterval);
     }
     
-    // Actualizar notificación cada segundo
     timerNotificationInterval = setInterval(async () => {
       try {
         const jornadaIdStr = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
@@ -221,27 +197,19 @@ export const iniciarNotificacionTemporizador = async (): Promise<void> => {
           const ahora = new Date();
           const inicio = new Date(fechaInicio);
           const diff = ahora.getTime() - inicio.getTime();
-          
-          // ------ TIEMPO TOTAL DE LA JORNADA ------
           const segundos = Math.floor((diff / 1000) % 60);
           const minutos = Math.floor((diff / (1000 * 60)) % 60);
           const horas = Math.floor((diff / (1000 * 60 * 60)) % 24);
           const tiempoManejo = `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-          
-          // ------ VALIDAR TIEMPOS SCT ------
           const validacionSCT = await validarTiemposSCT(jornadaId, fechaInicio);
           
           let titulo = `📍 Jornada: ${tiempoManejo}`;
           let cuerpo = `${operador || 'Operador'} | ${unidad || 'Unidad'}`;
           let sonido = false;
-          
-          // Si hay alerta o límite SCT, actualizar notificación
           if (validacionSCT.estado === 'ALERTA') {
             titulo = `⚠️ RECORDATORIO SCT`;
             cuerpo = `${validacionSCT.mensaje}\nTipo: Jornada ${tiempoManejo}`;
-            sonido = Math.floor(ahora.getTime() / 2000) % 2 === 0; // Suena cada 2 segundos
-            
-            // Evitar spam: solo mostrar alerta si cambió el estado
+            sonido = Math.floor(ahora.getTime() / 2000) % 2 === 0;
             if (lastSCTAlertState !== 'ALERTA') {
               lastSCTAlertState = 'ALERTA';
               console.warn('⚠️ ALERTA SCT:', validacionSCT.mensaje);
@@ -250,19 +218,15 @@ export const iniciarNotificacionTemporizador = async (): Promise<void> => {
             titulo = `❌ VIOLACIÓN SCT`;
             cuerpo = `${validacionSCT.mensaje}\nDebes detener la jornada INMEDIATAMENTE`;
             sonido = true;
-            
-            // Evitar spam: solo mostrar alerta si cambió el estado
             if (lastSCTAlertState !== 'LIMITE') {
               lastSCTAlertState = 'LIMITE';
               console.error('❌ LÍMITE SCT:', validacionSCT.mensaje);
             }
           } else {
-            // Estado normal
             cuerpo += `\n⏱️ Conducción: ${(validacionSCT.tiempoConduccion / 60).toFixed(1)}h / 9h`;
             lastSCTAlertState = '';
           }
           
-          // Descartar notificación anterior antes de mostrar la nueva
           if (lastNotificationId) {
             try {
               await Notifications.dismissNotificationAsync(lastNotificationId);
@@ -271,18 +235,23 @@ export const iniciarNotificacionTemporizador = async (): Promise<void> => {
             }
           }
           
-          lastNotificationId = await Notifications.presentNotificationAsync({
-            title: titulo,
-            body: cuerpo,
-            badge: 1,
-            sound: sonido ? 'default' : false,
-            sticky: validacionSCT.estado !== 'NORMAL',
+          lastNotificationId = await Notifications.scheduleNotificationAsync({
+            identifier: 'bitacora-timer-ruta',
+            content: {
+              title: titulo,
+              body: cuerpo,
+              badge: 1,
+              sound: sonido ? 'default' : false,
+              sticky: validacionSCT.estado !== 'NORMAL',
+            },
+            trigger: null,
           });
+
         }
       } catch (error) {
         console.error("Error actualizando notificación del temporizador:", error);
       }
-    }, 1000); // Actualizar cada segundo
+    }, 1000); 
     
     console.log("✅ Notificación del temporizador iniciada con validación SCT");
   } catch (error) {
@@ -292,7 +261,6 @@ export const iniciarNotificacionTemporizador = async (): Promise<void> => {
 
 export const detenerNotificacionTemporizador = async (): Promise<void> => {
   try {
-    // Detener el intervalo
     if (timerNotificationInterval) {
       clearInterval(timerNotificationInterval);
       timerNotificationInterval = null;
@@ -300,17 +268,15 @@ export const detenerNotificacionTemporizador = async (): Promise<void> => {
     
     lastSCTAlertState = '';
     
-    // Descartar la última notificación que se mostró
     if (lastNotificationId) {
       try {
+        
         await Notifications.dismissNotificationAsync(lastNotificationId);
         lastNotificationId = null;
       } catch (e) {
         console.log("No se pudo descartar notificación al detener");
       }
     }
-    
-    // Descartar notificaciones pendientes del temporizador (por si acaso)
     const notifications = await Notifications.getPresentedNotificationsAsync();
     const notificacionesTimer = notifications.filter(n => 
       n.request.content.title?.includes('Jornada') || 

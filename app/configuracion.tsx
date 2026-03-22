@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-// Importamos las funciones de la base de datos
 import { exportarBaseDatos, importarBaseDatos } from '../db/database';
 
 const COLORS = {

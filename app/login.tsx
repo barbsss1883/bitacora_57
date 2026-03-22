@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-// 1. Importamos ImageBackground y StatusBar
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, ImageBackground, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -10,7 +9,6 @@ import { auth } from '../src/services/firebaseConfig';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { AvisoTexto } from '../src/components/AvisoPrivacidad';
 
-// Usamos la imagen local. Asegúrate de que la ruta sea correcta.
 const BACKGROUND_IMAGE = require('../assets/images/kenworth.png');
 
 const COLORS = {
@@ -135,7 +133,6 @@ export default function Login() {
       const userInfo = await GoogleSignin.signIn();
       console.log('google sign-in result', userInfo);
 
-      // Normalizamos cualquier forma en que Google devuelva el perfil
       const perfil =
         userInfo.data?.user ||
         userInfo;
@@ -169,14 +166,14 @@ export default function Login() {
   };
 
   return (
-    // 2. Usamos ImageBackground como contenedor principal
+
     <ImageBackground
       source={BACKGROUND_IMAGE}
       style={styles.backgroundImage}
       resizeMode="cover"
     >
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      {/* 3. Agregamos un Overlay oscuro para legibilidad */}
+      
       <View style={styles.overlay}>
         <View style={styles.content}>
           <View style={styles.header}>
@@ -276,7 +273,7 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  // 4. Estilos para la imagen y el overlay
+
   backgroundImage: {
     flex: 1,
     width: '100%',
@@ -284,7 +281,6 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    // Capa oscura con 70% de opacidad para que resalte el formulario
     backgroundColor: 'rgba(15, 23, 42, 0.70)',
     justifyContent: 'center',
   },
@@ -293,7 +289,6 @@ const styles = StyleSheet.create({
   iconCircle: { width: 80, height: 80, borderRadius: 20, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 15, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.30, shadowRadius: 4.65, elevation: 8 },
   title: { fontSize: 28, fontWeight: 'bold', color: 'white', textShadowColor: 'rgba(0, 0, 0, 0.75)', textShadowOffset: { width: -1, height: 1 }, textShadowRadius: 10 },
   subtitle: { fontSize: 12, color: COLORS.subtext, letterSpacing: 2, fontWeight: 'bold' },
-  // Hacemos el formulario un poco más transparente para que se integre con el fondo
   form: { backgroundColor: 'rgba(30, 41, 59, 0.90)', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
   formTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 10, marginBottom: 15, paddingHorizontal: 15, height: 50, borderWidth: 1, borderColor: COLORS.border },
@@ -310,7 +305,7 @@ const styles = StyleSheet.create({
   googleText: { color: '#333', fontWeight: 'bold', fontSize: 16 },
   toggleBtn: { marginTop: 20, alignItems: 'center' },
   toggleText: { color: COLORS.primary, fontSize: 14, fontWeight: 'bold' },
-  // Modal Styles
+  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: COLORS.card, borderRadius: 20, padding: 20, maxHeight: '80%', borderWidth: 1, borderColor: COLORS.border },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },

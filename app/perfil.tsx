@@ -33,16 +33,12 @@ export default function Perfil() {
   const router = useRouter();
   const webViewRef = useRef<WebView>(null);
   const [loading, setLoading] = useState(false);
-  
   const [nombre, setNombre] = useState('');
   const [licencia, setLicencia] = useState('');
   const [empresa, setEmpresa] = useState('');
   const [foto, setFoto] = useState<string | null>(null);
-  
   const [docLicencia, setDocLicencia] = useState<{uri: string, name: string, type: string} | null>(null);
   const [fotoIne, setFotoIne] = useState<string | null>(null);
-
-  // --- ESTADOS PARA EL VISOR DE DOCUMENTOS OFICIALES ---
   const [visorVisible, setVisorVisible] = useState(false);
   const [docVisualizado, setDocVisualizado] = useState<{uri: string, tipo: string} | null>(null);
   const [errorPdf, setErrorPdf] = useState(false);
@@ -51,7 +47,7 @@ export default function Perfil() {
   useEffect(() => {
     cargarDatos();
   }, []);
-
+  
   const cargarDatos = async () => {
     const userSession = await AsyncStorage.getItem('USER_SESSION');
     if (userSession) {
@@ -245,7 +241,6 @@ export default function Perfil() {
     );
   };
 
-  // --- FUNCIÓN PARA MOSTRAR A LA AUTORIDAD ---
   const mostrarDocumento = (uri: string, tipo: string) => {
       setErrorPdf(false);
       setZoomDocumento(1);
@@ -398,7 +393,6 @@ export default function Perfil() {
         <View style={{height: 40}} />
       </ScrollView>
 
-      {/* --- MODAL PANTALLA COMPLETA PARA MOSTRAR DOCUMENTO A OFICIALES --- */}
       <Modal visible={visorVisible} transparent={false} animationType="fade">
           <View style={styles.visorContainer}>
               <View style={styles.visorHeader}>

@@ -2,7 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import CryptoJS from 'crypto-js';
 import { Alert } from 'react-native';
-import Purchases from 'react-native-purchases'; // <--- IMPORTACIÓN DE SEGURIDAD
+import Purchases from 'react-native-purchases';
 
 export const generarPDF = async (
   jornada: any, 
@@ -13,13 +13,12 @@ export const generarPDF = async (
 ) => {
   if (!jornada) return;
 
-  // --- 0. VALIDACIÓN DE SEGURIDAD (SOLO PRO) ---
   try {
     const customerInfo = await Purchases.getCustomerInfo();
     const esPro = typeof customerInfo.entitlements.active['pro'] !== "undefined";
 
     if (!esPro) {
-        // Si no es PRO, no permitimos que el motor de PDF trabaje
+      
         Alert.alert(
             "Función Bloqueada",
             "Necesitas una suscripción PRO activa para generar y compartir documentos oficiales."
@@ -28,16 +27,12 @@ export const generarPDF = async (
     }
   } catch (e) {
     console.log("Error de validación en motor PDF", e);
-    // En caso de error de conexión, por seguridad, podrías elegir bloquear o permitir. 
-    // Aquí bloqueamos para proteger el modelo de negocio.
     return null;
   }
 
   const listaPausas = pausas || [];
   const listaIncidencias = incidencias || [];
   const listaPuntos = puntosRastreo || [];
-
-  // --- 1. SELLO DIGITAL (SHA-256) CONSISTENTE CON VALIDACIÓN WEB ---
   const idSello = Number(jornada.id_interno ?? jornada.id ?? 0);
   const kmSello = Number(jornada.km_totales ?? jornada.km_calculados ?? 0) || 0;
   const payloadSello = JSON.stringify({
@@ -48,8 +43,6 @@ export const generarPDF = async (
     km_totales: kmSello
   });
   const selloDigital = (jornada.sello_digital || CryptoJS.SHA256(payloadSello).toString()).toLowerCase();
-
-  // --- 2. QR OFICIAL CON TU LINK REAL ---
   const baseUrl = "https://bitacora57.com/validar";
   const idValidacion = jornada.id_interno ?? jornada.id;
   const urlValidacion = `${baseUrl}?id=${idValidacion}`;
@@ -58,7 +51,6 @@ export const generarPDF = async (
   const inicio = new Date(jornada.fecha_inicio).toLocaleString();
   const fin = jornada.fecha_fin ? new Date(jornada.fecha_fin).toLocaleString() : 'En curso';
 
-  // --- A. HTML DE PAUSAS ---
   const filasPausas = listaPausas.map((p: any) => `
     <tr>
       <td>${p.motivo || 'Varias'}</td>
@@ -68,7 +60,6 @@ export const generarPDF = async (
     </tr>
   `).join('');
 
-  // --- B. HTML DE INCIDENCIAS ---
   const filasIncidencias = listaIncidencias.map((i: any) => `
     <tr>
       <td style="color:#ef4444; font-weight:bold;">${i.tipo}</td>
@@ -78,7 +69,6 @@ export const generarPDF = async (
     </tr>
   `).join('');
 
-  // --- C. HTML DE TRAZABILIDAD (PUNTOS GPS) ---
   const filasRastreo = listaPuntos.map((pt: any) => `
     <tr>
       <td style="font-weight:bold; font-size:9px;">${new Date(pt.hora).toLocaleTimeString()}</td>
@@ -88,7 +78,6 @@ export const generarPDF = async (
     </tr>
   `).join('');
 
-  // --- D. HTML DE INSPECCIÓN VISUAL (CHECKLIST) ---
   let htmlInspeccion = '';
   if (inspeccion) {
     const checklistFuente = (inspeccion.items && typeof inspeccion.items === 'object')
@@ -142,7 +131,6 @@ export const generarPDF = async (
     `;
   }
 
-  // --- ARMADO DEL HTML FINAL ---
   const htmlContent = `
     <html>
       <head>

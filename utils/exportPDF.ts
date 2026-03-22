@@ -8,10 +8,7 @@ export async function exportPDF(j) {
     <table border="1" style="border-collapse:collapse;width:100%"><tr><th>Fecha</th><td>${new Date(j.fecha).toLocaleString()}</td></tr>
     <tr><th>Operador</th><td>${j.operador||''}</td></tr></table></body></html>`;
 
-  // Print to file
   const { uri } = await Print.printToFileAsync({ html });
-
-  // Share the generated file (cross-platform)
   await Sharing.shareAsync(uri);
   return uri;
 }

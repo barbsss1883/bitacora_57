@@ -7,11 +7,8 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location'; 
-import Purchases from 'react-native-purchases'; 
-// --- IMPORTACIÓN DE ADMOB ---
+import Purchases from 'react-native-purchases';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
-
-// FIREBASE
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db_firestore } from '../src/services/firebaseConfig';
 
@@ -25,7 +22,6 @@ const COLORS = {
   success: '#22c55e'
 };
 
-// ID de tu bloque de anuncios
 const AD_UNIT_ID = __DEV__ ? TestIds.BANNER : "ca-app-pub-9657693965267569/4678645716";
 
 export default function Home() {

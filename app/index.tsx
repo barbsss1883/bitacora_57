@@ -13,7 +13,6 @@ export default function Index() {
 
   const checkSession = async () => {
     try {
-      // Verificamos si existe la sesión guardada
       const user = await AsyncStorage.getItem('USER_SESSION');
       if (user) {
         setRutaDestino('/home');
@@ -34,7 +33,5 @@ export default function Index() {
       </View>
     );
   }
-
-  // Redirige a la ruta correcta sin dejar historial (replace)
   return <Redirect href={rutaDestino} />;
 }

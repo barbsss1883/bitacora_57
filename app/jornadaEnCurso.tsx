@@ -8,21 +8,16 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location'; 
 import * as Crypto from 'expo-crypto';
-import { Picker } from '@react-native-picker/picker'; // <-- Importamos el Picker
-
-// --- IMPORTAMOS TU MAPA BLINDADO ---
+import { Picker } from '@react-native-picker/picker'; 
 import MapaRuta from './mapaRuta'; 
-
-// SERVICIOS Y BD
 import { iniciarRastreoBackground, detenerRastreo, obtenerDireccion, validarPermisosRastreoBackground, iniciarNotificacionTemporizador, detenerNotificacionTemporizador } from '../src/services/LocationService'; 
 import { iniciarNuevaJornada, finalizarJornada, insertarPausa, insertarIncidencia, obtenerDetalleJornada, vincularInspeccionAViaje, obtenerKmTotalesJornada } from '../db/database';
 import FirmaDigital from '../src/components/FirmaDigital';
 import { generarPDF } from '../src/services/PdfGenerator'; 
-
-// FIREBASE
 import { db_firestore, storage } from '../src/services/firebaseConfig';
 import { doc, setDoc, serverTimestamp, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { supabase } from '../src/services/supabaseClient';
 
 const COLORS = {
   bg: '#0f172a', card: '#1e293b', primary: '#f59e0b', danger: '#7f1d1d',  
@@ -32,7 +27,6 @@ const COLORS = {
   police: '#3b82f6' 
 };
 
-// OPCIONES DE REPORTES (WAZE)
 const TIPOS_INCIDENCIA = [
   { id: 'puente_bajo', label: 'Puente Bajo', icon: 'bridge' },
   { id: 'calle_angosta', label: 'Calle Angosta', icon: 'road-variant' },
@@ -60,8 +54,8 @@ export default function JornadaEnCurso() {
   const [modalQR, setModalQR] = useState(false);
   
   const [formulario, setFormulario] = useState({
-    permisionario: '', domicilio: '', tipo_servicio: 'Carga General', // Aquí guardamos el Tipo de Carga
-    unidad: '', placas: '', marca: '', modelo: '', modalidad: 'Sencillo', // Sencillo, Full, Torton, etc.
+    permisionario: '', domicilio: '', tipo_servicio: 'Carga General', 
+    unidad: '', placas: '', marca: '', modelo: '', modalidad: 'Sencillo', 
     remolque1_eco: '', remolque1_placas: '', remolque2_eco: '', remolque2_placas: '', 
     operador: '', licencia: '', vigencia: '', origen: '', destino: ''
   });
@@ -93,7 +87,6 @@ export default function JornadaEnCurso() {
     return () => clearInterval(interval);
   }, [jornadaId, fechaInicio, enPausa]);
 
-  // --- REANUDACIÓN AUTOMÁTICA POR MOVIMIENTO ---
   useEffect(() => {
     let locationSubscription: Location.LocationSubscription | null = null;
 
@@ -198,7 +191,6 @@ export default function JornadaEnCurso() {
           throw new Error(rastreo.message);
         }
         
-        // --- INICIAR NOTIFICACIÓN DEL TEMPORIZADOR ---
         await iniciarNotificacionTemporizador();
         
         const datosInicioNube = {
@@ -355,6 +347,35 @@ export default function JornadaEnCurso() {
           incidencias_count: incidencias ? incidencias.length : 0
       });
 
+       try {
+        const { error: supabaseError } = await supabase
+          .from('rutas_recolectadas')
+          .insert([
+            {
+              usuario_id: jornada.licencia || 'anonimo',
+              tipo_unidad: formulario.modalidad || 'Sencillo', 
+              datos_viaje: {
+                type: "Feature",
+                geometry: {
+                  type: "LineString",
+                  coordinates: rutaJson ? JSON.parse(rutaJson).map((p: any) => [p.longitude, p.latitude]) : []
+                },
+                properties: {
+                  id_interno: idLocal,
+                  operador: jornada.operador,
+                  unidad: jornada.unidad,
+                  km_totales: kmTotales,
+                  incidencias: incidencias || []
+                }
+              },
+              procesado: false
+            }
+          ]);
+        if (supabaseError) console.log("Error enviando a Supabase:", supabaseError.message);
+      } catch (e) {
+        console.log("Fallo crítico en envío a Supabase, pero continuamos con el flujo original", e);
+      }
+      
       const uriPdf = await generarPDF({...jornada, firma: firmaBase64, km_totales: kmTotalesStr}, pausas, incidencias, inspeccionData, puntosIntermedios); 
       if (uriPdf) { await subirPdfFirebase(idLocal, uriPdf); }
       Alert.alert("Éxito", "Viaje finalizado.");
@@ -370,7 +391,6 @@ export default function JornadaEnCurso() {
     try {
         await detenerRastreo();
         await detenerNotificacionTemporizador();
-        // --- CALCULAMOS KM TOTALES DESDE LOS PUNTOS GPS ---
         const kmTotales = jornadaId ? await obtenerKmTotalesJornada(jornadaId) : 0;
         const rutaJson = await AsyncStorage.getItem('RUTA_OFFLINE_CACHE');
         if(jornadaId) {
@@ -437,9 +457,8 @@ export default function JornadaEnCurso() {
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
         
-        {/* TARJETA DE TIEMPO Y MAPA */}
         <View style={styles.timerCardNew}>
-          {/* ... (Todo el header del Timer se queda igual) ... */}
+
           <View style={styles.timerHeader}>
             <View style={{flexDirection:'row', alignItems:'center'}}>
                 <MaterialCommunityIcons name="timer-outline" size={18} color={COLORS.subtext} style={{marginRight: 5}} />
@@ -508,8 +527,7 @@ export default function JornadaEnCurso() {
           </>
         )}
       </View>
-
-      {/* --- EL MODAL DE REGISTRO CON LOS CATÁLOGOS SCT INTEGARDOS --- */}
+      
       <Modal visible={modalRegistro} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -563,7 +581,6 @@ export default function JornadaEnCurso() {
                       </Picker>
                     </View>
 
-                    {/* Mostrar campos de remolque dependiendo de la modalidad */}
                     {(formulario.modalidad === 'Sencillo' || formulario.modalidad === 'Full' || formulario.modalidad === 'Exceso de Dimensiones') && (
                       <>
                         <Text style={styles.labelSection}>3. Remolques</Text>
@@ -597,8 +614,6 @@ export default function JornadaEnCurso() {
             </View>
         </View>
       </Modal>
-
-      {/* RESTO DE LOS MODALES */}
       <Modal visible={modalPausa} transparent>
           <View style={[styles.modalOverlay, {justifyContent:'center'}]}>
               <View style={[styles.modalContent, {borderRadius:20}]}>
