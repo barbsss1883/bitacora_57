@@ -60,7 +60,8 @@ export default function Historial() {
       const detalle = await obtenerDetalleJornada(Number(item.id));
       const jornadaDetalle = detalle?.jornada ? { ...item, ...detalle.jornada } : { ...item };
 
-      const rutaActual = normalizarRutaCoordenadas(jornadaDetalle?.ruta_geojson);
+            const rutaActual = normalizarRutaCoordenadas(jornadaDetalle?.ruta_geojson);
+
       if (rutaActual.length === 0) {
         const [jornadaActivaId, rutaCache] = await Promise.all([
           AsyncStorage.getItem('CURRENT_JORNADA_ID'),

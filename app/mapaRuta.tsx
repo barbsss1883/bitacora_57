@@ -1,17 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Text, Vibration, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import * as turf from '@turf/turf';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-Mapbox.setAccessToken('pk.eyJ1IjoibHVpc2cwNDE4IiwiYSI6ImNtaXhoeDVxMTA0Z28zZ3B2d3d1M2Z6M20ifQ.uOyMfGrAILud_KpxGFEOig');
+Mapbox.setAccessToken("pk.eyJ1IjoibHVpc2cwNDE4IiwiYSI6ImNtbWY2YzhsNTA1YWMycm9rZXhnY3N3ZW8ifQ.4r9JJKMYgs3_BQB-HDZfkA");
 
 const MapaRuta = () => {
   const cameraRef = useRef<Mapbox.Camera>(null);
   const [permiso, setPermiso] = useState(false);
-  const [primerZoomHecho, setPrimerZoomHecho] = useState(false);
   const [descargandoMapa, setDescargandoMapa] = useState(false);
   const [progresoDescarga, setProgresoDescarga] = useState(0);
   const [rutaGrabada, setRutaGrabada] = useState<any>({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }]});
@@ -20,6 +19,9 @@ const MapaRuta = () => {
   const [estadoMovimiento, setEstadoMovimiento] = useState("ESPERANDO GPS...");
   const [alertaActiva, setAlertaActiva] = useState(false);
   const [mensajeAlerta, setMensajeAlerta] = useState("");
+  
+  // Nuevo estado para controlar que la cámara no pierda de vista al tráiler
+  const [seguirUsuario, setSeguirUsuario] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -42,7 +44,11 @@ const MapaRuta = () => {
     if (!ultimoPunto) { Alert.alert("Sin Ubicación", "Espera señal GPS."); return; }
     setDescargandoMapa(true);
     try {
-        const bounds = [[ultimoPunto - 0.5, ultimoPunto - 0.5], [ultimoPunto + 0.5, ultimoPunto + 0.5]];
+        // Corrección de coordenadas para el bounds
+        const bounds = [
+            [ultimoPunto - 0.5, ultimoPunto - 0.5], 
+            [ultimoPunto + 0.5, ultimoPunto + 0.5]
+        ];
         await Mapbox.offlineManager.createPack({ name: `ruta-${Date.now()}`, styleURL: 'mapbox://styles/mapbox/navigation-night-v1', minZoom: 10, maxZoom: 16, bounds: bounds as any }, (p: any) => setProgresoDescarga(Math.round(p.percentage)));
         Alert.alert("¡Listo!", "Mapa guardado para uso sin internet.");
     } catch (e) { Alert.alert("Error", "Fallo descarga."); } finally { setDescargandoMapa(false); setProgresoDescarga(0); }
@@ -58,11 +64,6 @@ const MapaRuta = () => {
   const alMoverse = async (location: Mapbox.Location) => {
     if (!location?.coords) return;
     const { longitude, latitude, speed, accuracy } = location.coords;
-
-    if (!primerZoomHecho && cameraRef.current) {
-        setPrimerZoomHecho(true);
-        cameraRef.current.setCamera({ centerCoordinate: [longitude, latitude], zoomLevel: 17, animationDuration: 2000 });
-    }
 
     const vel = speed && speed > 0 ? Math.round(speed * 3.6) : 0;
     setVelocidad(vel);
@@ -80,6 +81,7 @@ const MapaRuta = () => {
         const to = turf.point(nuevoPunto);
         const distanciaMetros = turf.distance(from, to, { units: 'kilometers' }) * 1000;
 
+        // Guarda punto si te moviste más de 5 metros y el GPS es preciso
         if (distanciaMetros > 5 && (accuracy ? accuracy < 25 : true)) {
             debeGuardar = true;
         }
@@ -91,17 +93,61 @@ const MapaRuta = () => {
         
         AsyncStorage.setItem('RUTA_OFFLINE_CACHE', JSON.stringify(coordenadasRef.current));
     }
-  }; // <--- AQUÍ FALTABA ESTA LLAVE DE CIERRE
+  };
 
-  const centrarManual = () => { setPrimerZoomHecho(false); };
+  const finalizarViaje = async () => {
+    const coords = coordenadasRef.current;
+    
+    if (coords.length < 2) {
+        Alert.alert("Ruta muy corta", "No hay suficientes datos GPS para guardar.");
+        return;
+    }
+
+    // Usamos Turf para calcular la distancia total de toda la ruta trazada
+    const lineaRuta = turf.lineString(coords);
+    const kilometrosTotales = turf.length(lineaRuta, { units: 'kilometers' });
+    
+    const datosFinales = {
+        kilometros_recorridos: kilometrosTotales.toFixed(2),
+        puntos_gps: coords,
+        fecha: new Date().toISOString()
+    };
+
+    Alert.alert(
+        "Viaje Finalizado", 
+        `Recorriste un total de ${kilometrosTotales.toFixed(2)} km.\n\nDatos listos para enviar a la base de datos.`
+    );
+
+    // TODO: Aquí integrarás tu función para guardar en la BD de zonas prohibidas/rutas seguras
+    console.log("Datos de la ruta listos:", datosFinales);
+  };
+
+  const centrarManual = () => { 
+      // Si el operador movió el mapa con el dedo, este botón vuelve a "enganchar" la cámara
+      setSeguirUsuario(true); 
+  };
   
   if (!permiso) return <View style={styles.center}><Text style={styles.textW}>Esperando permisos...</Text></View>;
 
   return (
     <View style={styles.page}>
       <View style={styles.container}>
-        <Mapbox.MapView style={styles.map} styleURL={'mapbox://styles/mapbox/navigation-night-v1'} logoEnabled={false} attributionEnabled={false} scaleBarEnabled={false}>
-            <Mapbox.Camera ref={cameraRef} zoomLevel={4} followUserMode={'course' as any} pitch={50} />
+        <Mapbox.MapView 
+            style={styles.map} 
+            styleURL={'mapbox://styles/mapbox/navigation-night-v1'} 
+            logoEnabled={false} 
+            attributionEnabled={false} 
+            scaleBarEnabled={false}
+            onTouchStart={() => setSeguirUsuario(false)} // Desengancha la cámara si el usuario toca la pantalla para explorar
+        >
+            <Mapbox.Camera 
+                ref={cameraRef} 
+                zoomLevel={16} 
+                pitch={50} 
+                followUserLocation={seguirUsuario} 
+                followUserMode={'course' as any} 
+                followZoomLevel={16}
+            />
 
             <Mapbox.UserLocation 
                 visible={true} 
@@ -125,6 +171,10 @@ const MapaRuta = () => {
         
         <TouchableOpacity style={styles.recenterBtn} onPress={centrarManual}>
             <MaterialCommunityIcons name="crosshairs-gps" size={30} color="#0f172a" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.recenterBtn, { top: 80, backgroundColor: '#ef4444' }]} onPress={finalizarViaje}>
+            <MaterialCommunityIcons name="stop-circle" size={30} color="white" />
         </TouchableOpacity>
         
         <TouchableOpacity style={[styles.downloadBtn, descargandoMapa && {backgroundColor: '#334155'}]} onPress={descargarZonaOffline} disabled={descargandoMapa}>

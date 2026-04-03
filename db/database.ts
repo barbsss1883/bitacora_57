@@ -17,7 +17,7 @@ const hashPassword = async (plainPassword: string) => {
   return `${PASSWORD_HASH_PREFIX}${digest}`;
 };
 
-const getDB = async () => {
+export const getDB = async () => {
   if (cachedDb) return cachedDb;
   try {
     cachedDb = await SQLite.openDatabaseAsync('bitacora.db');
@@ -127,7 +127,7 @@ export const initDatabase = async () => {
       await db.execAsync(`ALTER TABLE pausas ADD COLUMN direccion TEXT;`);
       await db.execAsync(`ALTER TABLE incidencias ADD COLUMN direccion TEXT;`);
     } catch (e) {
-    
+      // Si las columnas ya existen, atrapar el error silenciosamente
     }
 
     console.log('BD Inicializada correctamente');
@@ -357,8 +357,7 @@ export const calcularDistanciaTotalKm = (puntos: any[]): number => {
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLon = (lon2 - lon1) * (Math.PI / 180);
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + 
-              Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+              Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
@@ -591,7 +590,6 @@ export const calcularTiempoConduccionNeto = async (jornadaId: number, fechaInici
     const ahora = new Date();
     const inicio = new Date(fechaInicio);
     const tiempoTotalMs = ahora.getTime() - inicio.getTime();
-    let tiempoNetoBrutoMs = tiempoTotalMs;
 
     const pausas = await obtenerPausasJornada(jornadaId);
     let tiempoPausasMs = 0;
@@ -600,61 +598,18 @@ export const calcularTiempoConduccionNeto = async (jornadaId: number, fechaInici
       if (pausa.inicio && pausa.fin) {
         const pausaInicio = new Date(pausa.inicio);
         const pausaFin = new Date(pausa.fin);
-        tiempoPausasMs += pausaFin.getTime() - pausaInicio.getTime();
+        tiempoPausasMs += (pausaFin.getTime() - pausaInicio.getTime());
       } else if (pausa.duracion) {
-        tiempoPausasMs += pausa.duracion * 1000;
+        tiempoPausasMs += (pausa.duracion * 1000); 
       }
     }
 
-    const tiempoNetoBrautoMs = tiempoTotalMs - tiempoPausasMs;
-    return Math.floor(tiempoNetoBrautoMs / (1000 * 60)); 
+    const tiempoNetoConduccionMs = tiempoTotalMs - tiempoPausasMs;
+    
+    return Number((tiempoNetoConduccionMs / 3600000).toFixed(2));
+    
   } catch (e) {
     console.error('calcularTiempoConduccionNeto error:', e);
     return 0;
   }
 };
-
-export const validarTiemposSCT = async (jornadaId: number, fechaInicio: string): Promise<{
-  tiempoConduccion: number;
-  estado: 'NORMAL' | 'ALERTA' | 'LIMITE';
-  mensaje: string;
-  minutosRestantes: number;
-}> => {
-  try {
-    const tiempoConduccionMinutos = await calcularTiempoConduccionNeto(jornadaId, fechaInicio);
-    const tiempoConduccionHoras = tiempoConduccionMinutos / 60;
-    
-    const LIMITE_SCT_MINUTOS = 9 * 60; // 540 minutos
-    const ALERTA_SCT_MINUTOS = 8.5 * 60; // 510 minutos (alerta a 8h 30m)
-
-    let estado: 'NORMAL' | 'ALERTA' | 'LIMITE' = 'NORMAL';
-    let mensaje = `Conducción: ${tiempoConduccionHoras.toFixed(1)}h / 9h SCT`;
-    let minutosRestantes = LIMITE_SCT_MINUTOS - tiempoConduccionMinutos;
-
-    if (tiempoConduccionMinutos >= LIMITE_SCT_MINUTOS) {
-      estado = 'LIMITE';
-      mensaje = `❌ VIOLACIÓN SCT: ${tiempoConduccionHoras.toFixed(1)}h de conducción (Límite: 9h)`;
-      minutosRestantes = 0;
-    } else if (tiempoConduccionMinutos >= ALERTA_SCT_MINUTOS) {
-      estado = 'ALERTA';
-      mensaje = `⚠️ ALERTA SCT: Se acerca al límite de 9h (Actual: ${tiempoConduccionHoras.toFixed(1)}h)`;
-      minutosRestantes = LIMITE_SCT_MINUTOS - tiempoConduccionMinutos;
-    }
-
-    return {
-      tiempoConduccion: tiempoConduccionMinutos,
-      estado,
-      mensaje,
-      minutosRestantes
-    };
-  } catch (e) {
-    console.error('validarTiemposSCT error:', e);
-    return {
-      tiempoConduccion: 0,
-      estado: 'NORMAL',
-      mensaje: 'No se pudo validar tiempos SCT',
-      minutosRestantes: 540
-    };
-  }
-};
-

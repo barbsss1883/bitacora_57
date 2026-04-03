@@ -37,12 +37,12 @@ const TIPOS_INCIDENCIA = [
 
 export default function JornadaEnCurso() {
   const router = useRouter();
-  
+
   const [cargando, setCargando] = useState(true);
   const [jornadaId, setJornadaId] = useState<number | null>(null);
   const [fechaInicio, setFechaInicio] = useState<string | null>(null);
   const [visuales, setVisuales] = useState({ unidad: '---', operador: '---' });
-  
+
   const [enPausa, setEnPausa] = useState(false);
   const [inicioPausa, setInicioPausa] = useState<string | null>(null);
   const [tipoPausaActual, setTipoPausaActual] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export default function JornadaEnCurso() {
   const [modalFirma, setModalFirma] = useState(false);
   const [modalIncidencia, setModalIncidencia] = useState(false);
   const [modalQR, setModalQR] = useState(false);
-  
+
   const [formulario, setFormulario] = useState({
     permisionario: '', domicilio: '', tipo_servicio: 'Carga General', 
     unidad: '', placas: '', marca: '', modelo: '', modalidad: 'Sencillo', 
@@ -135,7 +135,7 @@ export default function JornadaEnCurso() {
       if (id && inicio) { setJornadaId(Number(id)); setFechaInicio(inicio); }
       if (vis) setVisuales(JSON.parse(vis));
       if (pStart) { setEnPausa(true); setInicioPausa(pStart); setTipoPausaActual(pType || 'Pausa'); }
-      
+
       if (!id) {
         const userSession = await AsyncStorage.getItem('USER_SESSION');
         const presets = await AsyncStorage.getItem('FORM_PRESETS');
@@ -190,9 +190,9 @@ export default function JornadaEnCurso() {
         if (!rastreo.ok) {
           throw new Error(rastreo.message);
         }
-        
+
         await iniciarNotificacionTemporizador();
-        
+
         const datosInicioNube = {
             ...datosParaGuardar,
             id_interno: nuevoId,
@@ -339,7 +339,7 @@ export default function JornadaEnCurso() {
           servidor_verificado: true, firma: firmaBase64, km_calculados: kmTotalesStr,
           fecha_fin_server: serverTimestamp(), sello_digital: selloDigital
         });
-      
+
       await setDoc(doc(db_firestore, "rutas_maestras", String(idLocal)), {
           id_interno: idLocal, empresa: jornada.permisionario, unidad: jornada.unidad, operador: jornada.operador,
           origen: jornada.origen, destino: jornada.destino, fecha_inicio: jornada.fecha_inicio, fecha_fin: serverTimestamp(),
@@ -375,7 +375,7 @@ export default function JornadaEnCurso() {
       } catch (e) {
         console.log("Fallo crítico en envío a Supabase, pero continuamos con el flujo original", e);
       }
-      
+
       const uriPdf = await generarPDF({...jornada, firma: firmaBase64, km_totales: kmTotalesStr}, pausas, incidencias, inspeccionData, puntosIntermedios); 
       if (uriPdf) { await subirPdfFirebase(idLocal, uriPdf); }
       Alert.alert("Éxito", "Viaje finalizado.");
@@ -437,7 +437,7 @@ export default function JornadaEnCurso() {
       let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const lat = location.coords.latitude;
       const lng = location.coords.longitude;
-      
+
       await insertarIncidencia(jornadaId, tipoIncidencia, descIncidencia, null, direccion); 
 
       await addDoc(collection(db_firestore, `reportes_ruta`), {
@@ -456,7 +456,7 @@ export default function JornadaEnCurso() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-        
+
         <View style={styles.timerCardNew}>
 
           <View style={styles.timerHeader}>
@@ -479,7 +479,7 @@ export default function JornadaEnCurso() {
                 )}
             </View>
           </View>
-          
+
           <View style={{flexDirection:'column', alignItems:'flex-end', marginBottom:10}}>
                 <View style={[styles.statusBadgeNew, {backgroundColor: enPausa ? COLORS.warning : COLORS.success}]}>
                     <Text style={styles.statusTextNew}>{enPausa ? "EN PAUSA" : "EN RUTA"}</Text>
@@ -527,7 +527,7 @@ export default function JornadaEnCurso() {
           </>
         )}
       </View>
-      
+
       <Modal visible={modalRegistro} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -536,10 +536,10 @@ export default function JornadaEnCurso() {
                     <TouchableOpacity onPress={() => setModalRegistro(false)}><MaterialCommunityIcons name="close" size={24} color="#fff"/></TouchableOpacity>
                 </View>
                 <ScrollView showsVerticalScrollIndicator={false}>
-                    
+
                     <Text style={styles.labelSection}>1. Empresa y Carga</Text>
                     <InputDark label="Permisionario (Razón Social)" val={formulario.permisionario} set={(t:string)=>setFormulario({...formulario, permisionario: t})} placeholder="Nombre Empresa" />
-                    
+
                     <Text style={{color:COLORS.subtext, fontSize:12, marginBottom:4, marginTop: 5}}>Tipo de Carga (SCT)</Text>
                     <View style={styles.pickerBox}>
                       <Picker 
@@ -603,11 +603,11 @@ export default function JornadaEnCurso() {
                         <InputDark label="Licencia" val={formulario.licencia} set={(t:string)=>setFormulario({...formulario, licencia: t})} flex />
                         <InputDark label="Vigencia" val={formulario.vigencia} set={(t:string)=>setFormulario({...formulario, vigencia: t})} flex />
                     </View>
-                    
+
                     <Text style={styles.labelSection}>5. Ruta</Text>
                     <InputDark label="Origen" val={formulario.origen} set={(t:string)=>setFormulario({...formulario, origen: t})} />
                     <InputDark label="Destino" val={formulario.destino} set={(t:string)=>setFormulario({...formulario, destino: t})} />
-                    
+
                     <TouchableOpacity style={styles.btnFullOrange} onPress={iniciarViaje}><Text style={styles.btnText}>COMENZAR VIAJE Y RASTREO</Text></TouchableOpacity>
                     <View style={{height:60}}/>
                 </ScrollView>

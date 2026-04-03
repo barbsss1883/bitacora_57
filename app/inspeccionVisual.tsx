@@ -46,19 +46,19 @@ const PUNTOS_REVISION = [
 
 export default function InspeccionVisual() {
   const router = useRouter();
-  
+
   const [cargando, setCargando] = useState(true); 
   const [jornadaId, setJornadaId] = useState<number | null>(null);
   const [tipo, setTipo] = useState('inicio'); 
   const [checklist, setChecklist] = useState<any>({});
   const [comentarios, setComentarios] = useState('');
-  
+
   const [modalFirma, setModalFirma] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     setTimeout(() => setCargando(false), 600);
-    
+
     const checkJornada = async () => {
         const id = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
         if (id) setJornadaId(Number(id));
@@ -97,7 +97,7 @@ export default function InspeccionVisual() {
         );
 
         await AsyncStorage.setItem('ULTIMA_INSPECCION', hoy);
-        
+
         const datosParaPDF = {
             fecha: hoy, hora: hora, tipo: tipo,
             items: checklist, // {frenos: true, ...}
@@ -147,7 +147,7 @@ export default function InspeccionVisual() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        
+
         <View style={styles.selectorContainer}>
             <TouchableOpacity 
                 style={[styles.selectorBtn, tipo === 'inicio' && {backgroundColor: COLORS.primary}]} 
@@ -207,13 +207,13 @@ export default function InspeccionVisual() {
         </TouchableOpacity>
 
       </ScrollView>
-      
+
       <Modal visible={modalFirma} animationType="slide">
           <View style={{flex:1, backgroundColor: COLORS.bg}}>
               <FirmaDigital onOK={finalizarGuardado} onCancel={() => setModalFirma(false)} />
           </View>
       </Modal>
-      
+
       {guardando && (
           <View style={StyleSheet.absoluteFillObject}>
               <View style={{flex:1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent:'center', alignItems:'center'}}>
