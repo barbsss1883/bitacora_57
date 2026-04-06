@@ -1,31 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, ScrollView, 
-  TextInput, StatusBar, Alert, Modal, Animated
+  TextInput, StatusBar, Alert, Modal, Animated, Platform, ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import FirmaDigital from '../src/components/FirmaDigital';
 import { guardarInspeccion } from '../db/database';
 
 const COLORS = {
-  bg: '#0f172a', card: '#1e293b', primary: '#f59e0b', // Naranja Bitácora
-  text: '#f8fafc', subtext: '#94a3b8', success: '#10b981', danger: '#ef4444',
-  border: '#334155', white: '#ffffff', skeleton: '#334155'
+  bg: '#010A14',
+  card: '#051C33',
+  textGold: '#C5A059', 
+  textWelcome: '#9DA8B5', 
+  goldBevel: '#D4AF37', 
+  white: '#FFFFFF',
+  success: '#10b981',
+  danger: '#ef4444', // Rojo para fallas
+  border: '#2A4A69',
+  skeleton: '#081D33'
 };
 
-const Skeleton = ({ width, height, style }: any) => {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true })
-      ])
-    ).start();
-  }, []);
-  return <Animated.View style={[{ opacity, width, height, backgroundColor: COLORS.skeleton, borderRadius: 6 }, style]} />;
+const GRADIENTS = {
+  cardRed: ['#450A0A', '#2D0606', '#010A14'], // Fondo Rojo (Falla)
+  cardGreen: ['#065F46', '#064E3B', '#022C22'], // Fondo Verde (OK)
+  goldBtn: ['#D4AF37', '#C5A059', '#8A6E2F'],
+  header: ['#051C33', '#010A14'],
 };
 
 const PUNTOS_REVISION = [
@@ -46,23 +48,24 @@ const PUNTOS_REVISION = [
 
 export default function InspeccionVisual() {
   const router = useRouter();
-
   const [cargando, setCargando] = useState(true); 
   const [jornadaId, setJornadaId] = useState<number | null>(null);
   const [tipo, setTipo] = useState('inicio'); 
-  const [checklist, setChecklist] = useState<any>({});
-  const [comentarios, setComentarios] = useState('');
+  
+  // LÓGICA: Iniciamos con todos los puntos en FALSE (Rojo/Mal)
+  const [checklist, setChecklist] = useState<any>(() => {
+    return PUNTOS_REVISION.reduce((acc, item) => ({ ...acc, [item.id]: false }), {});
+  });
 
+  const [comentarios, setComentarios] = useState('');
   const [modalFirma, setModalFirma] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    setTimeout(() => setCargando(false), 600);
-
+    setTimeout(() => setCargando(false), 800);
     const checkJornada = async () => {
         const id = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
         if (id) setJornadaId(Number(id));
-        else setJornadaId(0); 
     };
     checkJornada();
   }, []);
@@ -72,20 +75,28 @@ export default function InspeccionVisual() {
   };
 
   const solicitarFirma = () => {
-    // Validación rápida
-    if (Object.keys(checklist).length < 5) { // Al menos 5 puntos
-        Alert.alert("Inspección Incompleta", "Por favor verifica los puntos críticos.");
-        return;
+    // Contamos cuántos están en rojo (false)
+    const fallas = Object.values(checklist).filter(v => v === false).length;
+    
+    if (fallas > 0) {
+      Alert.alert(
+        "Puntos en Rojo", 
+        `Tienes ${fallas} puntos marcados como FALLA. ¿Deseas continuar con el reporte de daños?`,
+        [
+          { text: "Revisar más", style: 'cancel' },
+          { text: "Sí, Reportar Daños", onPress: () => setModalFirma(true) }
+        ]
+      );
+    } else {
+      setModalFirma(true);
     }
-    setModalFirma(true);
   };
 
   const finalizarGuardado = async (firmaBase64: string) => {
     setModalFirma(false);
-    setGuardando(true); // Bloqueo UI sutil
-
+    setGuardando(true);
     try {
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = new Date().toLocaleDateString('en-CA');
         const hora = new Date().toLocaleTimeString();
 
         await guardarInspeccion(
@@ -97,113 +108,104 @@ export default function InspeccionVisual() {
         );
 
         await AsyncStorage.setItem('ULTIMA_INSPECCION', hoy);
-
-        const datosParaPDF = {
-            fecha: hoy, hora: hora, tipo: tipo,
-            items: checklist, // {frenos: true, ...}
-            comentarios: comentarios,
-            estatus: comentarios.length > 5 ? 'CON OBSERVACIONES' : 'APROBADO'
-        };
-        await AsyncStorage.setItem(`INSPECCION_${hoy}`, JSON.stringify(datosParaPDF));
-
-        Alert.alert("Inspección Registrada", "Unidad validada correctamente.");
-        router.back();
+        
+        Alert.alert("Reporte Certificado", "La inspección ha sido guardada.");
+        router.replace('/home'); 
 
     } catch (error) {
-        Alert.alert("Error", "Intenta de nuevo.");
+        Alert.alert("Error", "No se pudo guardar.");
     } finally {
         setGuardando(false);
     }
   };
 
   if (cargando) {
-      return (
-        <View style={styles.container}>
-            <View style={{padding:20, paddingTop:60}}>
-                <Skeleton width={200} height={30} style={{marginBottom:20}} />
-                <View style={{flexDirection:'row', gap:10, marginBottom:20}}>
-                    <Skeleton width="48%" height={50} />
-                    <Skeleton width="48%" height={50} />
-                </View>
-                <View style={{flexDirection:'row', flexWrap:'wrap', gap:10}}>
-                    {[1,2,3,4,5,6].map(i => <Skeleton key={i} width="48%" height={100} style={{marginBottom:10}} />)}
-                </View>
-            </View>
-        </View>
-      );
+      return <View style={styles.container}><ActivityIndicator size="large" color={COLORS.goldBevel} style={{flex:1}} /></View>;
   }
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+      <StatusBar barStyle="light-content" />
 
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={{padding:5}}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
+      <LinearGradient colors={GRADIENTS.header} style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialCommunityIcons name="chevron-left" size={32} color={COLORS.goldBevel} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>INSPECCIÓN 360°</Text>
-        <View style={{width:30}} /> 
-      </View>
+        <View style={{width:40}} /> 
+      </LinearGradient>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.selectorContainer}>
+        <View style={styles.selectorWrapper}>
             <TouchableOpacity 
-                style={[styles.selectorBtn, tipo === 'inicio' && {backgroundColor: COLORS.primary}]} 
+                style={[styles.selectorBtn, tipo === 'inicio' && styles.selectorActive]} 
                 onPress={() => setTipo('inicio')}
             >
-                <Text style={[styles.selectorText, tipo === 'inicio' && {fontWeight:'bold', color: COLORS.bg}]}>SALIDA</Text>
+                <Text style={[styles.selectorText, tipo === 'inicio' && styles.textActive]}>SALIDA</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-                style={[styles.selectorBtn, tipo === 'fin' && {backgroundColor: COLORS.primary}]} 
+                style={[styles.selectorBtn, tipo === 'fin' && styles.selectorActive]} 
                 onPress={() => setTipo('fin')}
             >
-                <Text style={[styles.selectorText, tipo === 'fin' && {fontWeight:'bold', color: COLORS.bg}]}>LLEGADA</Text>
+                <Text style={[styles.selectorText, tipo === 'fin' && styles.textActive]}>LLEGADA</Text>
             </TouchableOpacity>
         </View>
 
-        <Text style={styles.instruction}>Verifica el estado físico de la unidad:</Text>
+        <Text style={styles.sectionLabel}>ESTADO DE LA UNIDAD (ROJO = FALLA | VERDE = OK)</Text>
 
-        {/* GRID DE CHECKLIST */}
         <View style={styles.grid}>
             {PUNTOS_REVISION.map((item) => {
-                const isChecked = checklist[item.id] === true;
+                const isOk = checklist[item.id] === true;
                 return (
                     <TouchableOpacity 
                         key={item.id} 
-                        style={[styles.checkItem, isChecked && styles.checkItemActive]}
+                        style={styles.cardWrapper}
                         onPress={() => togglePunto(item.id)}
-                        activeOpacity={0.7}
+                        activeOpacity={0.8}
                     >
-                        <MaterialCommunityIcons 
-                            name={isChecked ? "check-circle" : "checkbox-blank-circle-outline"} 
-                            size={24} 
-                            color={isChecked ? COLORS.success : COLORS.subtext} 
-                            style={{position:'absolute', top:8, right:8}}
-                        />
-                        <MaterialCommunityIcons name={item.icon as any} size={32} color={isChecked ? COLORS.white : COLORS.subtext} style={{marginBottom:8}} />
-                        <Text style={[styles.checkLabel, isChecked && {color: COLORS.white}]}>{item.label}</Text>
+                        <LinearGradient 
+                            colors={isOk ? GRADIENTS.cardGreen : GRADIENTS.cardRed} 
+                            style={[styles.cardInner, {borderColor: isOk ? COLORS.success : COLORS.danger}]}
+                        >
+                            <View style={[styles.iconCircle, {borderColor: isOk ? COLORS.success : COLORS.danger}]}>
+                                <MaterialCommunityIcons 
+                                    name={item.icon as any} 
+                                    size={28} 
+                                    color={isOk ? COLORS.success : COLORS.danger} 
+                                />
+                            </View>
+                            <Text style={[styles.cardTitle, {color: isOk ? COLORS.white : COLORS.white}]}>{item.label}</Text>
+                            
+                            <MaterialCommunityIcons 
+                                name={isOk ? "check-circle" : "alert-circle"} 
+                                size={20} 
+                                color={isOk ? COLORS.success : COLORS.danger} 
+                                style={styles.checkBadge}
+                            />
+                        </LinearGradient>
                     </TouchableOpacity>
                 );
             })}
         </View>
 
-        <View style={styles.commentBox}>
-            <Text style={styles.label}>Observaciones / Daños:</Text>
+        <View style={styles.commentContainer}>
+            <Text style={styles.label}>NOTAS ADICIONALES:</Text>
             <TextInput 
                 style={styles.input} 
                 multiline 
-                placeholder="Ej: Golpe en defensa trasera, llanta baja..." 
-                placeholderTextColor="#666"
+                placeholder="Describe cualquier anomalía..." 
+                placeholderTextColor="#475569"
                 value={comentarios}
                 onChangeText={setComentarios}
             />
         </View>
 
-        <TouchableOpacity style={styles.saveBtn} onPress={solicitarFirma}>
-            <Text style={styles.saveBtnText}>{guardando ? "GUARDANDO..." : "FIRMAR Y GUARDAR"}</Text>
-            {!guardando && <MaterialCommunityIcons name="draw" size={20} color={COLORS.bg} />}
+        <TouchableOpacity style={styles.saveBtnWrapper} onPress={solicitarFirma} disabled={guardando}>
+            <LinearGradient colors={GRADIENTS.goldBtn} style={styles.saveBtnInner}>
+                <Text style={styles.saveBtnText}>CERTIFICAR REPORTE</Text>
+                <MaterialCommunityIcons name="fountain-pen-tip" size={22} color={COLORS.bg} />
+            </LinearGradient>
         </TouchableOpacity>
 
       </ScrollView>
@@ -215,10 +217,9 @@ export default function InspeccionVisual() {
       </Modal>
 
       {guardando && (
-          <View style={StyleSheet.absoluteFillObject}>
-              <View style={{flex:1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent:'center', alignItems:'center'}}>
-                  <Text style={{color: COLORS.primary, fontWeight:'bold', marginTop:10}}>ENCRIPTANDO REPORTE...</Text>
-              </View>
+          <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color={COLORS.goldBevel} />
+              <Text style={styles.loadingText}>GUARDANDO...</Text>
           </View>
       )}
 
@@ -228,40 +229,28 @@ export default function InspeccionVisual() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    paddingTop: 50, paddingHorizontal: 20, paddingBottom: 20,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: COLORS.border
-  },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
-
-  selectorContainer: {
-    flexDirection: 'row', backgroundColor: COLORS.card, margin: 20, borderRadius: 10, padding: 5,
-    borderWidth: 1, borderColor: COLORS.border
-  },
-  selectorBtn: { flex: 1, padding: 12, alignItems: 'center', borderRadius: 8 },
-  selectorText: { color: COLORS.subtext },
-
-  instruction: { color: COLORS.subtext, marginLeft: 20, marginBottom: 10, fontSize: 12 },
-
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 15, justifyContent: 'space-between' },
-  checkItem: {
-    width: '48%', aspectRatio: 1, backgroundColor: COLORS.card, marginBottom: 15, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent'
-  },
-  checkItemActive: { borderColor: COLORS.success, backgroundColor: 'rgba(16, 185, 129, 0.1)' },
-  checkLabel: { color: COLORS.subtext, fontSize: 12, fontWeight: 'bold', marginTop: 5, textAlign: 'center' },
-
-  commentBox: { margin: 20 },
-  label: { color: COLORS.text, marginBottom: 8, fontWeight:'bold' },
-  input: { 
-    backgroundColor: COLORS.card, color: COLORS.text, borderRadius: 10, padding: 15, height: 100, 
-    textAlignVertical: 'top', borderWidth: 1, borderColor: COLORS.border 
-  },
-
-  saveBtn: {
-    backgroundColor: COLORS.primary, margin: 20, padding: 18, borderRadius: 12,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10
-  },
-  saveBtnText: { color: COLORS.bg, fontWeight: 'bold', fontSize: 16 }
+  header: { paddingTop: Platform.OS === 'ios' ? 70 : 50, paddingHorizontal: 15, paddingBottom: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.textGold, letterSpacing: 1 },
+  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: { padding: 15, paddingBottom: 50 },
+  selectorWrapper: { flexDirection: 'row', backgroundColor: '#031426', borderRadius: 12, padding: 6, borderWidth: 1.5, borderColor: COLORS.border, marginBottom: 20 },
+  selectorBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 8 },
+  selectorActive: { backgroundColor: COLORS.goldBevel },
+  selectorText: { color: COLORS.textWelcome, fontWeight: 'bold', fontSize: 13 },
+  textActive: { color: COLORS.bg },
+  sectionLabel: { color: COLORS.textWelcome, fontSize: 10, fontWeight: 'bold', marginBottom: 15, textAlign: 'center', letterSpacing: 0.5 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  cardWrapper: { width: '48%', aspectRatio: 1.05, marginBottom: 15 },
+  cardInner: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 2 },
+  iconCircle: { width: 50, height: 50, borderRadius: 25, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center', marginBottom: 8, backgroundColor: '#010A14' },
+  cardTitle: { fontSize: 12, fontWeight: 'bold', textAlign: 'center', paddingHorizontal: 5 },
+  checkBadge: { position: 'absolute', top: 10, right: 10 },
+  commentContainer: { marginTop: 10, marginBottom: 20 },
+  label: { color: COLORS.textGold, fontSize: 12, fontWeight: 'bold', marginBottom: 10, marginLeft: 5 },
+  input: { backgroundColor: '#031426', color: COLORS.white, borderRadius: 15, padding: 15, height: 100, textAlignVertical: 'top', borderWidth: 1.5, borderColor: COLORS.border },
+  saveBtnWrapper: { borderRadius: 15, overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)' },
+  saveBtnInner: { paddingVertical: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
+  saveBtnText: { color: COLORS.bg, fontWeight: '900', fontSize: 16 },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(1, 10, 20, 0.9)', justifyContent: 'center', alignItems: 'center' },
+  loadingText: { color: COLORS.goldBevel, fontWeight: 'bold', marginTop: 15 }
 });

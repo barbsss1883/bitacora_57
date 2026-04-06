@@ -5,6 +5,7 @@ class JornadaStateEmitter extends EventEmitter {
 
   private constructor() {
     super();
+    // Aumentamos el límite por si abres varias pantallas de inspección
     this.setMaxListeners(20);
   }
 
@@ -15,12 +16,12 @@ class JornadaStateEmitter extends EventEmitter {
     return JornadaStateEmitter.instance;
   }
 
-  // Emitir cambios de estado de la jornada
+  // Emitir cambios de estado de la jornada (FS, COND, DESC, SERV)
   emitirCambioEstado(estado: 'FS' | 'COND' | 'DESC' | 'SERV') {
     this.emit('ESTADO_CAMBIO', estado);
   }
 
-  // Escuchar cambios de estado
+  // Escuchar cambios de estado (Devuelve función de limpieza)
   onEstadoCambio(callback: (estado: string) => void) {
     this.on('ESTADO_CAMBIO', callback);
     return () => this.removeListener('ESTADO_CAMBIO', callback);
@@ -42,4 +43,5 @@ class JornadaStateEmitter extends EventEmitter {
   }
 }
 
+// Exportamos la instancia única (Singleton)
 export default JornadaStateEmitter.getInstance();

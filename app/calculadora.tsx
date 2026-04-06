@@ -7,24 +7,31 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const COLORS = {
-  bg: '#0f172a', 
-  card: '#1e293b', 
-  primary: '#f59e0b', 
-  text: '#f8fafc', 
-  subtext: '#94a3b8', 
-  success: '#22c55e',
-  border: '#334155'
+  bg: '#010A14',          // Tu fondo oscuro real
+  textGold: '#C5A059',    // Textos dorados
+  textWelcome: '#9DA8B5', // Textos secundarios
+  goldBevel: '#D4AF37',   // Acentos, iconos y líneas del mapa
+  white: '#FFFFFF',       // Textos principales
+  // --- Utilitarios ---
+  danger: '#A70000',      // Rojo (tomado de tu emergencyBg)
+  success: '#10B981',     // Verde (para "Finalizado")
+  border: '#12365A'       // Azul de tus tarjetas para bordes sutiles
+};
+
+const GRADIENTS = {
+  cardBg: ['#12365A', '#081D33', '#030E1A'],
+  emergencyBg: ['#A70000', '#7A0000', '#4A0000'], 
 };
 
 export default function CalculadoraDiesel() {
   const router = useRouter();
 
   const [form, setForm] = useState({
-    km: '',               // kilometros
-    inicial: '',          // capacidadTanques (o litros al inicio)
-    recargas: '',         // litrosCargadosRuta
-    finales: '',          // litrosFinales (Sobrante en tanque)
-    ralenti: '',          // litrosRelanti
+    km: '',               
+    inicial: '',          
+    recargas: '',         
+    finales: '',          
+    ralenti: '',          
   });
 
   const [resultado, setResultado] = useState<any>(null);
@@ -126,8 +133,8 @@ export default function CalculadoraDiesel() {
             </View>
             
             {/* Dato de auditoría técnica */}
-            <View style={{marginTop: 15, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#334155'}}>
-                 <Text style={{color: '#555', fontSize: 10, textAlign:'center'}}>
+            <View style={{marginTop: 15, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border}}>
+                 <Text style={{color: COLORS.subtext, fontSize: 10, textAlign:'center'}}>
                     Auditoría de masa: Diferencia {resultado.diferencia} (Debe ser 0)
                  </Text>
             </View>
@@ -145,7 +152,8 @@ export default function CalculadoraDiesel() {
                 <Input label="Litros RECARGAS" val={form.recargas} set={(t:string)=>setForm({...form, recargas:t})} kbd="numeric" flex placeholder="Ruta" />
             </View>
 
-            <View style={{backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: 10, borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)'}}>
+            {/* 2. BACKGROUND INLINE ADAPTADO AL NUEVO DORADO (#EAB308) */}
+            <View style={{backgroundColor: 'rgba(234, 179, 8, 0.1)', padding: 10, borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(234, 179, 8, 0.3)'}}>
                 <Input label="Litros FINALES (Lectura Varilla/Reloj)" val={form.finales} set={(t:string)=>setForm({...form, finales:t})} kbd="numeric" placeholder="¿Cuánto sobró al llegar?" />
             </View>
 
@@ -177,20 +185,20 @@ const Input = ({ label, val, set, kbd, flex, placeholder }: any) => (
         onChangeText={set} 
         keyboardType={kbd ? 'numeric' : 'default'}
         placeholder={placeholder}
-        placeholderTextColor="#555"
+        placeholderTextColor={COLORS.border}
     />
   </View>
 );
 
+// 3. STYLESHEET LIMPIO (Sin sombras ni bordes toscos)
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     paddingTop: Platform.OS === 'android' ? 40 : 50,
     paddingHorizontal: 20,
     paddingBottom: 20,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.bg, // Integrado al fondo principal
     flexDirection: 'row', alignItems: 'center', justifyContent:'space-between',
-    elevation: 5
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
   backBtn: { padding: 5 },
@@ -205,14 +213,14 @@ const styles = StyleSheet.create({
   btnOutline: { flex:0.4, borderWidth:1, borderColor: COLORS.border, padding: 15, borderRadius: 10, alignItems: 'center' },
   btnText: { fontWeight: 'bold', color: '#000' },
 
-  resultCard: { margin: 20, marginBottom: 0, padding: 20, backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 1, borderColor: COLORS.success },
+  resultCard: { margin: 20, marginBottom: 0, padding: 20, backgroundColor: COLORS.card, borderRadius: 16 },
   resultTitle: { color: COLORS.success, textAlign:'center', fontWeight:'bold', marginBottom: 15, fontSize: 14, letterSpacing: 1 },
   labelSmall: { color: COLORS.subtext, fontSize: 10, marginBottom: 5, fontWeight: 'bold' },
   bigNumber: { fontSize: 42, fontWeight: 'bold', color: 'white' },
   explainerText: { color: COLORS.subtext, fontSize: 11, textAlign: 'center', marginTop: 5, fontStyle: 'italic' },
   
   divider: { height:1, backgroundColor: COLORS.border, marginVertical: 15 },
-  dividerSmall: { height:1, backgroundColor: '#334155', marginVertical: 8, width:'100%' },
+  dividerSmall: { height:1, backgroundColor: COLORS.border, marginVertical: 8, width:'100%' },
   
   rowDetails: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   textDetails: { color: COLORS.subtext, fontSize: 14 },

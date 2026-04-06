@@ -15,15 +15,20 @@ import { generarPDF } from '../src/services/PdfGenerator';
 import { extraerCoordenadaLngLat, extraerFechaPuntoISO, normalizarRutaCoordenadas, parseRutaPuntos } from '../utils/routeUtils';
 
 const COLORS = {
-  bg: '#0f172a',
-  card: '#1e293b',
-  primary: '#f59e0b',
-  text: '#f8fafc',
-  subtext: '#94a3b8',
-  danger: '#ef4444',
-  success: '#10b981',
-  border: '#334155',
-  mapPath: '#3b82f6'
+  bg: '#010A14',          // Tu fondo oscuro real
+  textGold: '#C5A059',    // Textos dorados
+  textWelcome: '#9DA8B5', // Textos secundarios
+  goldBevel: '#D4AF37',   // Acentos, iconos y líneas del mapa
+  white: '#FFFFFF',       // Textos principales
+  // --- Utilitarios ---
+  danger: '#A70000',      // Rojo (tomado de tu emergencyBg)
+  success: '#10B981',     // Verde (para "Finalizado")
+  border: '#12365A'       // Azul de tus tarjetas para bordes sutiles
+};
+
+const GRADIENTS = {
+  cardBg: ['#12365A', '#081D33', '#030E1A'],
+  emergencyBg: ['#A70000', '#7A0000', '#4A0000'], 
 };
 
 export default function Historial() {
@@ -197,7 +202,7 @@ export default function Historial() {
         if (!inspeccion) {
             try { inspeccion = JSON.parse(itemSeleccionado.inspeccion_json || 'null'); } catch(e){}
         }
-        
+
         // Reconstruir puntos de rastreo para el PDF
         let puntosRastreo = [];
         if (itemSeleccionado.ruta_geojson) {
@@ -241,7 +246,7 @@ export default function Historial() {
         </View>
         <Text style={styles.cardDate}>{new Date(item.fecha_inicio).toLocaleDateString()}</Text>
       </View>
-      
+
       <View style={styles.row}>
         <Text style={styles.label}>Origen:</Text>
         <Text style={styles.value} numberOfLines={1}>{item.origen}</Text>
@@ -252,7 +257,7 @@ export default function Historial() {
       </View>
 
       <View style={styles.divider} />
-      
+
       <View style={{flexDirection:'row', justifyContent:'space-between'}}>
           <Text style={[styles.status, {color: item.fecha_fin ? COLORS.success : COLORS.primary}]}>
             {item.fecha_fin ? "FINALIZADO" : "PENDIENTE"}
@@ -264,7 +269,7 @@ export default function Historial() {
 
   const MapaHistorial = ({ rutaJson }: { rutaJson: unknown }) => {
       if (!rutaJson) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Sin datos de ruta</Text></View>;
-      
+
       const coordenadas = normalizarRutaCoordenadas(rutaJson);
 
       if (coordenadas.length === 0) return <View style={styles.mapError}><Text style={{color:'#aaa'}}>Ruta vacía o inválida</Text></View>;
@@ -387,7 +392,7 @@ export default function Historial() {
                     <MaterialCommunityIcons name="close-circle" size={30} color={COLORS.subtext} />
                 </TouchableOpacity>
             </View>
-            
+
             <ScrollView contentContainerStyle={{padding: 20}}>
                 <Text style={styles.sectionTitle}>Ruta Recorrida</Text>
                 {normalizarRutaCoordenadas(itemSeleccionado?.ruta_geojson).length > 0 ? (
@@ -445,37 +450,42 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     paddingTop: 50, paddingBottom: 15, paddingHorizontal: 20,
-    backgroundColor: COLORS.card, flexDirection: 'row', justifyContent:'space-between', alignItems: 'center'
+    backgroundColor: COLORS.bg, flexDirection: 'row', justifyContent:'space-between', alignItems: 'center'
   },
-  headerTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  headerTitle: { color: COLORS.textGold, fontSize: 18, fontWeight: 'bold' },
+  
   card: {
-    backgroundColor: COLORS.card, borderRadius: 12, padding: 15, marginBottom: 15,
-    borderWidth: 1, borderColor: COLORS.border
+    // Si usas LinearGradient esto se sobrescribe, si no, usa el azul central de tu degradado
+    backgroundColor: '#081D33', 
+    borderRadius: 12, padding: 15, marginBottom: 15,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  cardId: { color: COLORS.primary, fontWeight: 'bold' },
-  cardDate: { color: COLORS.subtext, fontSize: 12 },
+  cardId: { color: COLORS.goldBevel, fontWeight: 'bold' },
+  cardDate: { color: COLORS.textWelcome, fontSize: 12 },
+  
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  label: { color: COLORS.subtext, width: 60, fontSize: 12 },
-  value: { color: COLORS.text, fontWeight: '500', flex: 1 },
+  label: { color: COLORS.textWelcome, width: 60, fontSize: 12 },
+  value: { color: COLORS.white, fontWeight: '500', flex: 1 },
+  
   divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 10 },
   status: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
+  
   modalBg: { flex: 1, backgroundColor: COLORS.bg },
   modalHeader: { 
       padding: 20, paddingTop: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      borderBottomWidth: 1, borderBottomColor: COLORS.border
+      backgroundColor: COLORS.bg
   },
-  modalTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-  sectionTitle: { color: COLORS.primary, marginVertical: 15, fontWeight: 'bold', fontSize: 16 },
-  detailBox: { backgroundColor: COLORS.card, padding: 15, borderRadius: 10 },
-  mapContainer: { height: 250, borderRadius: 12, overflow: 'hidden', backgroundColor: '#111', borderWidth:1, borderColor: COLORS.border },
+  modalTitle: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
+  sectionTitle: { color: COLORS.textGold, marginVertical: 15, fontWeight: 'bold', fontSize: 16 },
+  
+  detailBox: { backgroundColor: '#081D33', padding: 15, borderRadius: 10 },
+  
+  mapContainer: { height: 250, borderRadius: 12, overflow: 'hidden', backgroundColor: '#081D33' },
   map: { width: '100%', height: '100%' },
-  mapOverlay: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', padding: 5, borderRadius: 5 },
-  mapOverlayText: { color: 'white', fontSize: 10 },
-  mapError: { flex: 1, justifyContent: 'center', alignItems: 'center', height: 250 },
-  btnAction: { 
-      flexDirection: 'row', backgroundColor: COLORS.primary, padding: 15, 
-      borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 10 
-  },
-  btnText: { fontWeight: 'bold', color: '#000' }
+  mapOverlay: { position: 'absolute', top: 10, right: 10, backgroundColor: '#081D33', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5, borderWidth: 1, borderColor: COLORS.border },
+  mapOverlayText: { color: COLORS.goldBevel, fontSize: 12, fontWeight: 'bold' },
+  mapError: { height: 250, justifyContent: 'center', alignItems: 'center', backgroundColor: '#081D33', borderRadius: 12 },
+  
+  btnAction: { backgroundColor: COLORS.goldBevel, padding: 15, borderRadius: 10, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  btnText: { color: COLORS.bg, fontWeight: 'bold', fontSize: 14 }
 });

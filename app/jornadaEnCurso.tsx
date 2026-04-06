@@ -20,11 +20,18 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { supabase } from '../src/services/supabaseClient';
 
 const COLORS = {
-  bg: '#0f172a', card: '#1e293b', primary: '#f59e0b', danger: '#7f1d1d',  
-  text: '#f8fafc', subtext: '#94a3b8', success: '#10b981', 
-  border: '#334155', warning: '#f97316', white: '#ffffff',
-  modalOverlay: 'rgba(15, 23, 42, 0.95)',
-  police: '#3b82f6' 
+  bg: '#010A14',           // Azul noche (Fondo principal de tu Home)
+  card: '#081D33',         // Azul marino (Para las tarjetas y modales)
+  primary: '#D4AF37',      // Dorado principal (goldBevel)
+  danger: '#A70000',       // Rojo profundo (De tu emergencyBg)
+  text: '#FFFFFF',         // Blanco puro para textos
+  subtext: '#9DA8B5',      // Azul grisáceo (textWelcome)
+  success: '#10B981',      // Verde brillante para confirmaciones
+  border: '#12365A',       // Azul de tus tarjetas para bordes sutiles
+  warning: '#C5A059',      // Dorado oscuro para alertas (textGold)
+  white: '#FFFFFF',        // Blanco puro
+  modalOverlay: 'rgba(1, 10, 20, 0.95)', // Fondo de tu Home con 95% de transparencia
+  police: '#3B82F6'        // Azul claro (Para distinguir reportes de policía/GN)
 };
 
 const TIPOS_INCIDENCIA = [
@@ -231,11 +238,14 @@ export default function JornadaEnCurso() {
     } catch (e) { console.error("Error subiendo PDF:", e); }
   };
 
-  const sincronizarYFinalizar = async (idLocal: number, firmaBase64: string, rutaJson: string | null) => {
+  const sincronizarYFinalizar = async (idLocal: number, firmaBase64: string, rutaJsonParam: string | null) => {
     try {
       const dataFull = await obtenerDetalleJornada(idLocal);
       if (!dataFull.jornada) return;
       const { jornada, pausas, incidencias, inspecciones }: {jornada:any, pausas:any, incidencias:any, inspecciones:any[]} = dataFull;
+
+      // OJO: Usamos jornada.ruta_geojson (el Feature generado por finalizarJornada) si rutaJsonParam es nulo.
+      const rutaFinalGeojson = rutaJsonParam || jornada.ruta_geojson;
 
       let inspeccionData: any = null;
       try {
@@ -243,12 +253,12 @@ export default function JornadaEnCurso() {
         if (inspeccionesDB.length > 0) {
           const ultimaInspeccion = [...inspeccionesDB].sort(
             (a: any, b: any) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime()
-          )[0];
+          );
           let items = {};
           try { items = JSON.parse(ultimaInspeccion.detalles_json || '{}'); } catch (e) {}
           const fechaInspeccion = ultimaInspeccion.fecha ? new Date(ultimaInspeccion.fecha) : null;
           inspeccionData = {
-            fecha: fechaInspeccion ? fechaInspeccion.toISOString().split('T')[0] : '---',
+            fecha: fechaInspeccion ? fechaInspeccion.toISOString().split('T') : '---',
             hora: fechaInspeccion ? fechaInspeccion.toLocaleTimeString() : '---',
             tipo: ultimaInspeccion.tipo || 'general',
             items,
@@ -258,7 +268,7 @@ export default function JornadaEnCurso() {
         }
 
         if (!inspeccionData) {
-          const fechaViaje = jornada?.fecha_inicio ? String(jornada.fecha_inicio).split('T')[0] : null;
+          const fechaViaje = jornada?.fecha_inicio ? String(jornada.fecha_inicio).split('T') : null;
           if (fechaViaje) {
             const inspeccionRaw = await AsyncStorage.getItem(`INSPECCION_${fechaViaje}`);
             if (inspeccionRaw) inspeccionData = JSON.parse(inspeccionRaw);
@@ -266,7 +276,7 @@ export default function JornadaEnCurso() {
         }
 
         if (!inspeccionData) {
-          const hoy = new Date().toISOString().split('T')[0];
+          const hoy = new Date().toISOString().split('T');
           const inspeccionRaw = await AsyncStorage.getItem(`INSPECCION_${hoy}`);
           if (inspeccionRaw) inspeccionData = JSON.parse(inspeccionRaw);
         }
@@ -291,9 +301,24 @@ export default function JornadaEnCurso() {
           }));
       }
 
-      if (rutaJson) {
+      // Procesamiento condicional para soportar el nuevo GeoJSON Feature y el viejo formato de arreglos
+      if (rutaFinalGeojson) {
           try {
-              const coordenadas = JSON.parse(rutaJson);
+              const parsedData = JSON.parse(rutaFinalGeojson);
+              let coordenadas = [];
+
+              if (parsedData.type === 'Feature') {
+                  const coords = parsedData.geometry.coordinates;
+                  const times = parsedData.properties?.timestamps || [];
+                  coordenadas = coords.map((c: any[], i: number) => ({
+                      latitude: c,
+                      longitude: c,
+                      timestamp: times[i] || 0
+                  }));
+              } else if (Array.isArray(parsedData)) {
+                  coordenadas = parsedData;
+              }
+
               if (Array.isArray(coordenadas) && coordenadas.length > 0) {
                   const paso = Math.max(1, Math.floor(coordenadas.length / 10));
                   for (let i = 0; i < coordenadas.length - 1; i++) {
@@ -334,7 +359,7 @@ export default function JornadaEnCurso() {
       await setDoc(doc(db_firestore, "jornadas", String(idLocal)), {
           ...jornada, id_interno: idLocal, empresa: jornada.permisionario, estatus: 'finalizado',
           pausas: pausas || [], incidencias: incidencias || [], inspeccion: inspeccionData || "No registrada",
-          puntos_rastreo: puntosIntermedios, ruta_geojson: rutaJson, ultima_sincronizacion: serverTimestamp(),
+          puntos_rastreo: puntosIntermedios, ruta_geojson: rutaFinalGeojson, ultima_sincronizacion: serverTimestamp(),
           km_totales: kmTotales,
           servidor_verificado: true, firma: firmaBase64, km_calculados: kmTotalesStr,
           fecha_fin_server: serverTimestamp(), sello_digital: selloDigital
@@ -343,35 +368,60 @@ export default function JornadaEnCurso() {
       await setDoc(doc(db_firestore, "rutas_maestras", String(idLocal)), {
           id_interno: idLocal, empresa: jornada.permisionario, unidad: jornada.unidad, operador: jornada.operador,
           origen: jornada.origen, destino: jornada.destino, fecha_inicio: jornada.fecha_inicio, fecha_fin: serverTimestamp(),
-          km_totales: kmTotales, estatus: 'finalizado', ruta: rutaJson, 
+          km_totales: kmTotales, estatus: 'finalizado', ruta: rutaFinalGeojson, 
           incidencias_count: incidencias ? incidencias.length : 0
       });
 
        try {
-        const { error: supabaseError } = await supabase
-          .from('rutas_recolectadas')
-          .insert([
-            {
-              usuario_id: jornada.licencia || 'anonimo',
-              tipo_unidad: formulario.modalidad || 'Sencillo', 
-              datos_viaje: {
-                type: "Feature",
-                geometry: {
-                  type: "LineString",
-                  coordinates: rutaJson ? JSON.parse(rutaJson).map((p: any) => [p.longitude, p.latitude]) : []
-                },
-                properties: {
-                  id_interno: idLocal,
-                  operador: jornada.operador,
-                  unidad: jornada.unidad,
-                  km_totales: kmTotales,
-                  incidencias: incidencias || []
-                }
-              },
-              procesado: false
+        let featureGeoJSONParaSupabase = null;
+
+        if (rutaFinalGeojson) {
+            const parsedRuta = JSON.parse(rutaFinalGeojson);
+            if (parsedRuta.type === 'Feature') {
+                // Preservamos velocidades y timestamps, agregando datos de negocio en el root de properties
+                featureGeoJSONParaSupabase = {
+                    ...parsedRuta,
+                    properties: {
+                        ...parsedRuta.properties,
+                        id_interno: idLocal,
+                        operador: jornada.operador,
+                        unidad: jornada.unidad,
+                        km_totales: kmTotales,
+                        incidencias: incidencias || []
+                    }
+                };
+            } else if (Array.isArray(parsedRuta)) {
+                // Manejo del formato antiguo por retrocompatibilidad
+                featureGeoJSONParaSupabase = {
+                    type: "Feature",
+                    geometry: {
+                      type: "LineString",
+                      coordinates: parsedRuta.map((p: any) => [p.longitude || p.lng, p.latitude || p.lat])
+                    },
+                    properties: {
+                      id_interno: idLocal,
+                      operador: jornada.operador,
+                      unidad: jornada.unidad,
+                      km_totales: kmTotales,
+                      incidencias: incidencias || []
+                    }
+                };
             }
-          ]);
-        if (supabaseError) console.log("Error enviando a Supabase:", supabaseError.message);
+        }
+
+        if (featureGeoJSONParaSupabase) {
+            const { error: supabaseError } = await supabase
+              .from('rutas_recolectadas')
+              .insert([
+                {
+                  usuario_id: jornada.licencia || 'anonimo',
+                  tipo_unidad: formulario.modalidad || 'Sencillo', 
+                  datos_viaje: featureGeoJSONParaSupabase,
+                  procesado: false
+                }
+              ]);
+            if (supabaseError) console.log("Error enviando a Supabase:", supabaseError.message);
+        }
       } catch (e) {
         console.log("Fallo crítico en envío a Supabase, pero continuamos con el flujo original", e);
       }
@@ -392,10 +442,10 @@ export default function JornadaEnCurso() {
         await detenerRastreo();
         await detenerNotificacionTemporizador();
         const kmTotales = jornadaId ? await obtenerKmTotalesJornada(jornadaId) : 0;
-        const rutaJson = await AsyncStorage.getItem('RUTA_OFFLINE_CACHE');
+        const rutaJsonParam = await AsyncStorage.getItem('RUTA_OFFLINE_CACHE');
         if(jornadaId) {
-            await finalizarJornada(jornadaId, firmaBase64, rutaJson, kmTotales);
-            await sincronizarYFinalizar(jornadaId, firmaBase64, rutaJson);
+            await finalizarJornada(jornadaId, firmaBase64, rutaJsonParam, kmTotales);
+            await sincronizarYFinalizar(jornadaId, firmaBase64, rutaJsonParam);
         }
         await AsyncStorage.removeItem('RUTA_OFFLINE_CACHE');
         await AsyncStorage.multiRemove([

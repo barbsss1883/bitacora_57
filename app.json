@@ -94,7 +94,8 @@
           "savePhotosPermission": "Permite guardar reportes en tu galería.",
           "isAccessMediaLocationEnabled": true
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {

@@ -97,7 +97,9 @@ export const initDatabase = async () => {
         latitud REAL,
         longitud REAL,
         velocidad REAL,
-        fecha TEXT
+        fecha TEXT,
+        timestamp REAL,
+        precision_gps REAL
       );
 
       CREATE TABLE IF NOT EXISTS pausas (
@@ -126,6 +128,8 @@ export const initDatabase = async () => {
       await db.execAsync(`ALTER TABLE jornadas ADD COLUMN sello_digital TEXT;`);
       await db.execAsync(`ALTER TABLE pausas ADD COLUMN direccion TEXT;`);
       await db.execAsync(`ALTER TABLE incidencias ADD COLUMN direccion TEXT;`);
+      await db.execAsync(`ALTER TABLE puntos_gps ADD COLUMN timestamp REAL;`);
+      await db.execAsync(`ALTER TABLE puntos_gps ADD COLUMN precision_gps REAL;`);
     } catch (e) {
       // Si las columnas ya existen, atrapar el error silenciosamente
     }
@@ -189,9 +193,27 @@ export const finalizarJornada = async (id: number, firma: string, rutaGeoJson: s
     
     let rutaFinal = rutaGeoJson;
     if (!rutaFinal) {
-      const puntosGPS = await db.getAllAsync('SELECT latitud, longitud, velocidad, fecha FROM puntos_gps WHERE jornada_id = ? ORDER BY fecha ASC', [id]);
+      const puntosGPS: any[] = await db.getAllAsync('SELECT latitud, longitud, velocidad, timestamp, precision_gps FROM puntos_gps WHERE jornada_id = ? ORDER BY id ASC', [id]);
       if (puntosGPS && puntosGPS.length > 0) {
-        rutaFinal = JSON.stringify(puntosGPS);
+        
+        const coordinates = puntosGPS.map(p => [p.longitud, p.latitud]);
+        const velocidades = puntosGPS.map(p => p.velocidad || 0);
+        const timestamps = puntosGPS.map(p => p.timestamp || 0);
+        const precision = puntosGPS.map(p => p.precision_gps || 0);
+
+        const featureGeoJSON = {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: coordinates
+          },
+          properties: {
+            velocidades: velocidades,
+            timestamps: timestamps,
+            precision_gps: precision
+          }
+        };
+        rutaFinal = JSON.stringify(featureGeoJSON);
       }
     }
     
@@ -256,10 +278,7 @@ export const registrarUsuario = async (nombre: string, email: string, pass: stri
 
 export const loginConGoogle = async (googleUser: any) => {
   try {
-    console.log("RECIBIDO EN DB:", JSON.stringify(googleUser));
-    
     const db = await getDB();
-    
     const datosUsuario = googleUser.user || googleUser; 
 
     const email = datosUsuario.email;
@@ -336,12 +355,15 @@ export const guardarInspeccion = async (jornadaId: number, tipo: string, detalle
   }
 };
 
-export const insertarPuntoGPS = async (jornadaId: number, lat: number, long: number, vel: number | null) => {
+export const insertarPuntoGPS = async (jornadaId: number, lat: number, long: number, vel: number | null, timestamp: number = 0, accuracy: number = 0) => {
   if (!jornadaId) return false;
   try {
     const db = await getDB();
-    const fecha = new Date().toISOString();
-    await db.runAsync(`INSERT INTO puntos_gps (jornada_id, latitud, longitud, velocidad, fecha) VALUES (?,?,?,?,?)`, [jornadaId, lat, long, vel || 0, fecha]);
+    const fecha = timestamp > 0 ? new Date(timestamp).toISOString() : new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO puntos_gps (jornada_id, latitud, longitud, velocidad, fecha, timestamp, precision_gps) VALUES (?,?,?,?,?,?,?)`, 
+      [jornadaId, lat, long, vel || 0, fecha, timestamp, accuracy]
+    );
     return true;
   } catch (e) {
     console.error('insertarPuntoGPS error:', e);
@@ -431,7 +453,6 @@ export const obtenerDetalleJornada = async (id: number) => {
     const pausas = await db.getAllAsync('SELECT * FROM pausas WHERE jornada_id = ?', [id]);
     const incidencias = await db.getAllAsync('SELECT * FROM incidencias WHERE jornada_id = ?', [id]);
     const inspecciones = await db.getAllAsync('SELECT * FROM inspecciones WHERE jornada_id = ?', [id]);
-    
     const puntosGPS = await db.getAllAsync('SELECT latitud, longitud, velocidad, fecha FROM puntos_gps WHERE jornada_id = ? ORDER BY fecha ASC', [id]);
     
     let rutaGeojson = jornada?.ruta_geojson || null;
@@ -501,7 +522,6 @@ export const obtenerEstadisticasUsuario = async (usuarioId?: number) => {
 export const vincularInspeccionAViaje = async (nuevoJornadaId: number) => {
   try {
     const db = await getDB();
-
     const hoyStart = new Date();
     hoyStart.setHours(0, 0, 0, 0);
     const hoyEnd = new Date();
@@ -514,8 +534,6 @@ export const vincularInspeccionAViaje = async (nuevoJornadaId: number) => {
        AND fecha >= ? AND fecha <= ?`,
       [nuevoJornadaId, hoyStart.toISOString(), hoyEnd.toISOString()]
     );
-
-    console.log(`Inspecciones vinculadas al viaje ${nuevoJornadaId}: ${result.changes}`);
     return result.changes > 0;
   } catch (e) {
     console.error('Error vincularInspeccionAViaje:', e);
@@ -542,7 +560,6 @@ export const eliminarViaje = async (id: number) => {
     await db.runAsync('DELETE FROM incidencias WHERE jornada_id = ?', [id]);
     await db.runAsync('DELETE FROM inspecciones WHERE jornada_id = ?', [id]);
     await db.runAsync('DELETE FROM puntos_gps WHERE jornada_id = ?', [id]);
-    console.log(`Viaje ${id} eliminado correctamente.`);
   } catch (error) {
     console.error("Error al eliminar viaje:", error);
   }
@@ -553,23 +570,18 @@ export const eliminarCuentaYDatosLocales = async () => {
   try {
     db = await getDB();
     await db.execAsync('BEGIN IMMEDIATE TRANSACTION;');
-
     await db.runAsync('DELETE FROM puntos_gps');
     await db.runAsync('DELETE FROM pausas');
     await db.runAsync('DELETE FROM incidencias');
     await db.runAsync('DELETE FROM inspecciones');
     await db.runAsync('DELETE FROM jornadas');
-
     await db.runAsync('DELETE FROM documentos');
     await db.runAsync('DELETE FROM usuarios');
-
     await db.execAsync('COMMIT;');
     return true;
   } catch (error) {
-    if (db) {
-      try { await db.execAsync('ROLLBACK;'); } catch (_) {}
-    }
-    console.error("Error al eliminar cuenta y datos locales:", error);
+    if (db) { try { await db.execAsync('ROLLBACK;'); } catch (_) {} }
+    console.error("Error al eliminar cuenta:", error);
     return false;
   }
 };
@@ -599,17 +611,50 @@ export const calcularTiempoConduccionNeto = async (jornadaId: number, fechaInici
         const pausaInicio = new Date(pausa.inicio);
         const pausaFin = new Date(pausa.fin);
         tiempoPausasMs += (pausaFin.getTime() - pausaInicio.getTime());
-      } else if (pausa.duracion) {
-        tiempoPausasMs += (pausa.duracion * 1000); 
       }
     }
 
     const tiempoNetoConduccionMs = tiempoTotalMs - tiempoPausasMs;
-    
-    return Number((tiempoNetoConduccionMs / 3600000).toFixed(2));
-    
+    return tiempoNetoConduccionMs;
   } catch (e) {
     console.error('calcularTiempoConduccionNeto error:', e);
     return 0;
+  }
+};
+
+/**
+ * LÓGICA NOM-087-SCT PARA NOTIFICACIONES
+ */
+export const validarTiemposSCT = async (jornadaId: number, fechaInicio: string) => {
+  try {
+    const tiempoManejoMs = await calcularTiempoConduccionNeto(jornadaId, fechaInicio);
+    const minutosConduccion = Math.floor(tiempoManejoMs / (1000 * 60));
+
+    // NOM-087: Máximo 5 horas (300 minutos) de conducción continua
+    if (minutosConduccion >= 300) {
+      return {
+        estado: 'LIMITE',
+        mensaje: 'Has superado las 5 horas de conducción continua. Debes tomar una pausa de 30 minutos.',
+        tiempoConduccion: minutosConduccion
+      };
+    }
+    
+    // Alerta preventiva 30 minutos antes de alcanzar el límite
+    if (minutosConduccion >= 270) {
+      return {
+        estado: 'ALERTA',
+        mensaje: 'Pronto alcanzarás las 5 horas. Planifica tu descanso de 30 minutos.',
+        tiempoConduccion: minutosConduccion
+      };
+    }
+    
+    return {
+      estado: 'NORMAL',
+      mensaje: 'Tiempos dentro de la norma.',
+      tiempoConduccion: minutosConduccion
+    };
+  } catch (e) {
+    console.error('validarTiemposSCT error:', e);
+    return { estado: 'NORMAL', mensaje: 'Error calculando tiempos', tiempoConduccion: 0 };
   }
 };
