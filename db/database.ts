@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Crypto from 'expo-crypto'; 
@@ -343,15 +343,32 @@ export const eliminarDocumento = async (id: number) => {
   }
 };
 
-export const guardarInspeccion = async (jornadaId: number, tipo: string, detalles: any, comentarios: string, firma: string) => {
+export const guardarInspeccion = async (
+  jornadaId: number,
+  tipo: string,
+  detalles: any,
+  comentarios: string,
+  firma: string
+): Promise<number | null> => {
   try {
     const db = await getDB();
     const fecha = new Date().toISOString();
-    await db.runAsync(`INSERT INTO inspecciones (jornada_id, tipo, detalles_json, comentarios, firma, fecha) VALUES (?,?,?,?,?,?)`, [jornadaId, tipo || 'general', JSON.stringify(detalles || {}), comentarios || '', firma || '', fecha]);
-    return true;
+    const result = await db.runAsync(
+      `INSERT INTO inspecciones (jornada_id, tipo, detalles_json, comentarios, firma, fecha)
+       VALUES (?,?,?,?,?,?)`,
+      [
+        jornadaId,
+        tipo || 'general',
+        JSON.stringify(detalles || {}),
+        comentarios || '',
+        firma || '',
+        fecha,
+      ]
+    );
+    return result.lastInsertRowId ?? null;
   } catch (e) {
     console.error('guardarInspeccion error:', e);
-    return false;
+    return null;
   }
 };
 
@@ -482,8 +499,10 @@ export const obtenerDetalleJornada = async (id: number) => {
 export const exportarBaseDatos = async () => {
   try {
     const dbUri = (FileSystem as any).documentDirectory + 'SQLite/bitacora.db';
-    const info = await FileSystem.getInfoAsync(dbUri);
-    if (!info.exists) return false;
+    // ✅ Nueva API: File class en lugar del deprecado getInfoAsync
+    const { File } = await import('expo-file-system');
+    const dbFile = new File(dbUri);
+    if (!(await dbFile.exists)) return false;
     if (!(await Sharing.isAvailableAsync())) return false;
     await Sharing.shareAsync(dbUri, { mimeType: 'application/x-sqlite3', dialogTitle: 'Respaldo Bitácora 57' });
     return true;
@@ -635,26 +654,17 @@ export const validarTiemposSCT = async (jornadaId: number, fechaInicio: string) 
       return {
         estado: 'LIMITE',
         mensaje: 'Has superado las 5 horas de conducción continua. Debes tomar una pausa de 30 minutos.',
-        tiempoConduccion: minutosConduccion
+        tiempoConduccion: minutosConduccion,
       };
     }
-    
-    // Alerta preventiva 30 minutos antes de alcanzar el límite
-    if (minutosConduccion >= 270) {
-      return {
-        estado: 'ALERTA',
-        mensaje: 'Pronto alcanzarás las 5 horas. Planifica tu descanso de 30 minutos.',
-        tiempoConduccion: minutosConduccion
-      };
-    }
-    
+
     return {
-      estado: 'NORMAL',
-      mensaje: 'Tiempos dentro de la norma.',
+      estado: 'OK',
       tiempoConduccion: minutosConduccion
     };
+
   } catch (e) {
     console.error('validarTiemposSCT error:', e);
-    return { estado: 'NORMAL', mensaje: 'Error calculando tiempos', tiempoConduccion: 0 };
+    return null;
   }
 };

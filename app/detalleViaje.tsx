@@ -30,14 +30,14 @@ import {
 } from '../src/services/PdfGenerator';
 
 const COLORS = {
-  bg: '#0f172a',
-  card: '#1e293b',
-  primary: '#f59e0b',
-  text: '#f8fafc',
-  subtext: '#94a3b8',
-  danger: '#ef4444',
+  bg:      '#010A14',      // fondo principal más profundo
+  card:    '#0D2137',      // tarjetas con más contraste respecto al bg
+  primary: '#D4AF37',      // dorado consistente con el resto de la app
+  text:    '#FFFFFF',      // blanco puro para máxima legibilidad
+  subtext: '#9DA8B5',      // gris azulado suave
+  danger:  '#ef4444',
   success: '#10b981',
-  border: '#334155'
+  border:  '#12365A',      // borde visible pero sutil
 };
 
 export default function DetalleViaje() {
@@ -375,43 +375,92 @@ export default function DetalleViaje() {
   );
 
   const styles = StyleSheet.create({
-    container: {
-      flex: 1, backgroundColor: COLORS.bg
-    },
-    header: {
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.card, paddingTop: 50, paddingBottom: 15, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: COLORS.border
-    },
-    title: {
-      color: COLORS.text, fontSize: 18, fontWeight: 'bold'
-    },
-    sectionTitle: {
-      color: COLORS.primary, fontSize: 16, fontWeight: 'bold', marginBottom: 15, marginTop: 10
-    },
-    mapContainer: {
-      height: 250, backgroundColor: COLORS.card, borderRadius: 12, overflow: 'hidden', marginBottom: 25, borderWidth: 1, borderColor: COLORS.border
-    },
-    infoCard: {
-      backgroundColor: COLORS.card, borderRadius: 12, padding: 15, marginBottom: 25
-    },
-    row: {
-      flexDirection: 'row', marginBottom: 10
-    },
-    label: {
-      color: COLORS.subtext, width: 80, fontSize: 14
-    },
-    value: {
-      color: COLORS.text, flex: 1, fontSize: 14, fontWeight: '500'
-    },
-    btnPrimary: {
-      backgroundColor: COLORS.primary, flexDirection: 'row', padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 15
-    },
-    btnPrimaryText: {
-      color: '#000', fontWeight: 'bold', fontSize: 14
-    },
-    btnDanger: {
-      flexDirection: 'row', padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.danger, backgroundColor: 'rgba(239, 68, 68, 0.1)'
-    },
-    btnDangerText: {
-      color: COLORS.danger, fontWeight: 'bold', fontSize: 14
-    }
-  });
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#051C33',   // ← más claro que bg para distinguirse
+    paddingTop: 50,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  title: {
+    color: COLORS.text,           // blanco puro
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  sectionTitle: {
+    color: COLORS.primary,        // dorado
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    marginTop: 10,
+  },
+  mapContainer: {
+    height: 250,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 25,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  infoCard: {
+    backgroundColor: '#0D2137',   // ← azul oscuro visible
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 25,
+    borderWidth: 1,
+    borderColor: COLORS.border,   // ← borde para definir el card
+  },
+  row: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  label: {
+    color: '#7A9BBF',             // azul grisáceo más visible que #94a3b8
+    width: 80,
+    fontSize: 14,
+  },
+  value: {
+    color: COLORS.text,           // blanco puro
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',            // un poco más de peso
+  },
+  btnPrimary: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+  },
+  btnPrimaryText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  btnDanger: {
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.danger,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  btnDangerText: {
+    color: COLORS.danger,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+});

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, ScrollView, 
-  TextInput, StatusBar, Alert, Modal, Animated, Platform, ActivityIndicator
+  TextInput, StatusBar, Alert, Modal, Platform, ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,6 +9,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import FirmaDigital from '../src/components/FirmaDigital';
 import { guardarInspeccion } from '../db/database';
+// ✅ NUEVO: importar el servicio de reporte combinado
+import { generarReporteCompleto } from '../src/services/PdfReporteCompleto';
 
 const COLORS = {
   bg: '#010A14',
@@ -18,32 +20,32 @@ const COLORS = {
   goldBevel: '#D4AF37', 
   white: '#FFFFFF',
   success: '#10b981',
-  danger: '#ef4444', // Rojo para fallas
+  danger: '#ef4444', 
   border: '#2A4A69',
   skeleton: '#081D33'
 };
 
 const GRADIENTS = {
-  cardRed: ['#450A0A', '#2D0606', '#010A14'], // Fondo Rojo (Falla)
-  cardGreen: ['#065F46', '#064E3B', '#022C22'], // Fondo Verde (OK)
+  cardRed: ['#450A0A', '#2D0606', '#010A14'], 
+  cardGreen: ['#065F46', '#064E3B', '#022C22'], 
   goldBtn: ['#D4AF37', '#C5A059', '#8A6E2F'],
   header: ['#051C33', '#010A14'],
 };
 
+// 🛠️ ACTUALIZADO: Lista oficial basada en la NOM-068-SCT
 const PUNTOS_REVISION = [
-  { id: 'frenos', label: '1. Frenos / Aire', icon: 'car-brake-abs' },
-  { id: 'luces', label: '2. Luces / Faros', icon: 'car-light-high' },
-  { id: 'llantas', label: '3. Llantas / Rines', icon: 'tire' },
-  { id: 'direccion', label: '4. Dirección', icon: 'steering' },
-  { id: 'parabrisas', label: '5. Parabrisas', icon: 'wiper' },
-  { id: 'espejos', label: '6. Espejos', icon: 'car-mirror' },
-  { id: 'claxon', label: '7. Claxon', icon: 'bullhorn' },
-  { id: 'niveles', label: '8. Niveles (Aceite)', icon: 'oil' },
-  { id: 'combustible', label: '9. Tanques Diesel', icon: 'gas-station' },
-  { id: 'escape', label: '10. Sist. Escape', icon: 'smog' },
-  { id: 'acoplamiento', label: '11. 5ta Rueda', icon: 'link-variant' },
-  { id: 'seguridad', label: '12. Extintor/Triang', icon: 'fire-extinguisher' },
-  { id: 'documentos', label: '13. Documentos', icon: 'file-document-outline' },
+  { id: 'frenos', label: 'Sistema Frenos / Aire', icon: 'car-brake-fluid' },
+  { id: 'llantas', label: 'Llantas / Rines / Birlos', icon: 'tire' },
+  { id: 'quintaRueda', label: '5ta Rueda / Seguros', icon: 'link-variant' },
+  { id: 'direccion', label: 'Caja Dirección / Barras', icon: 'steering' },
+  { id: 'suspension', label: 'Suspensión / Muelles', icon: 'car-shift-pattern' },
+  { id: 'combustible', label: 'Tanques Diesel / Fugas', icon: 'gas-station' },
+  { id: 'escape', label: 'Mofle / Sist. Escape', icon: 'smog' },
+  { id: 'luces', label: 'Luces Exteriores / Gálibo', icon: 'car-light-high' },
+  { id: 'parabrisas', label: 'Parabrisas / Limpiadores', icon: 'wiper' },
+  { id: 'espejos', label: 'Espejos Retrovisores', icon: 'car-mirror' },
+  { id: 'emergencia', label: 'Extintor / Triángulos', icon: 'fire-extinguisher' },
+  { id: 'documentos', label: 'Documentación Oficial', icon: 'file-document-outline' },
 ];
 
 export default function InspeccionVisual() {
@@ -54,7 +56,7 @@ export default function InspeccionVisual() {
   
   // LÓGICA: Iniciamos con todos los puntos en FALSE (Rojo/Mal)
   const [checklist, setChecklist] = useState<any>(() => {
-    return PUNTOS_REVISION.reduce((acc, item) => ({ ...acc, [item.id]: false }), {});
+    return PUNTOS_REVISION.reduce((acc, item) => ({ ...acc, [item.label]: false }), {});
   });
 
   const [comentarios, setComentarios] = useState('');
@@ -70,18 +72,17 @@ export default function InspeccionVisual() {
     checkJornada();
   }, []);
 
-  const togglePunto = (id: string) => {
-    setChecklist((prev: any) => ({ ...prev, [id]: !prev[id] }));
+  const togglePunto = (label: string) => {
+    setChecklist((prev: any) => ({ ...prev, [label]: !prev[label] }));
   };
 
   const solicitarFirma = () => {
-    // Contamos cuántos están en rojo (false)
     const fallas = Object.values(checklist).filter(v => v === false).length;
     
     if (fallas > 0) {
       Alert.alert(
         "Puntos en Rojo", 
-        `Tienes ${fallas} puntos marcados como FALLA. ¿Deseas continuar con el reporte de daños?`,
+        `Tienes ${fallas} puntos marcados como FALLA.\n\nSegún la NOM-068, el camión podría considerarse fuera de servicio. ¿Deseas continuar con el reporte de daños?`,
         [
           { text: "Revisar más", style: 'cancel' },
           { text: "Sí, Reportar Daños", onPress: () => setModalFirma(true) }
@@ -97,9 +98,9 @@ export default function InspeccionVisual() {
     setGuardando(true);
     try {
         const hoy = new Date().toLocaleDateString('en-CA');
-        const hora = new Date().toLocaleTimeString();
 
-        await guardarInspeccion(
+        // ✅ MODIFICADO: guardarInspeccion ahora retorna el id (ver database.ts)
+        const inspeccionId = await guardarInspeccion(
             jornadaId || 0,
             tipo === 'inicio' ? 'SALIDA (NOM-068)' : 'LLEGADA (NOM-068)',
             checklist,
@@ -108,12 +109,23 @@ export default function InspeccionVisual() {
         );
 
         await AsyncStorage.setItem('ULTIMA_INSPECCION', hoy);
-        
-        Alert.alert("Reporte Certificado", "La inspección ha sido guardada.");
+
+        Alert.alert(
+          "Reporte Certificado",
+          "La inspección oficial ha sido guardada y está lista para exportarse en PDF."
+        );
+
+        // ✅ NUEVO: Generar reporte completo NOM-068 + ELD en segundo plano.
+        // Se ejecuta sin await para no bloquear la navegación.
+        // Si el operador no tiene PRO, el servicio mostrará su propio Alert.
+        if (inspeccionId) {
+          generarReporteCompleto(inspeccionId, jornadaId || 0);
+        }
+
         router.replace('/home'); 
 
     } catch (error) {
-        Alert.alert("Error", "No se pudo guardar.");
+        Alert.alert("Error", "No se pudo guardar la inspección.");
     } finally {
         setGuardando(false);
     }
@@ -131,7 +143,7 @@ export default function InspeccionVisual() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <MaterialCommunityIcons name="chevron-left" size={32} color={COLORS.goldBevel} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>INSPECCIÓN 360°</Text>
+        <Text style={styles.headerTitle}>INSPECCIÓN NOM-068</Text>
         <View style={{width:40}} /> 
       </LinearGradient>
 
@@ -152,16 +164,16 @@ export default function InspeccionVisual() {
             </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionLabel}>ESTADO DE LA UNIDAD (ROJO = FALLA | VERDE = OK)</Text>
+        <Text style={styles.sectionLabel}>PUNTOS DE REVISIÓN OFICIAL (ROJO = FALLA | VERDE = OK)</Text>
 
         <View style={styles.grid}>
             {PUNTOS_REVISION.map((item) => {
-                const isOk = checklist[item.id] === true;
+                const isOk = checklist[item.label] === true;
                 return (
                     <TouchableOpacity 
                         key={item.id} 
                         style={styles.cardWrapper}
-                        onPress={() => togglePunto(item.id)}
+                        onPress={() => togglePunto(item.label)}
                         activeOpacity={0.8}
                     >
                         <LinearGradient 
@@ -175,7 +187,7 @@ export default function InspeccionVisual() {
                                     color={isOk ? COLORS.success : COLORS.danger} 
                                 />
                             </View>
-                            <Text style={[styles.cardTitle, {color: isOk ? COLORS.white : COLORS.white}]}>{item.label}</Text>
+                            <Text style={[styles.cardTitle, {color: COLORS.white}]}>{item.label}</Text>
                             
                             <MaterialCommunityIcons 
                                 name={isOk ? "check-circle" : "alert-circle"} 
@@ -190,11 +202,11 @@ export default function InspeccionVisual() {
         </View>
 
         <View style={styles.commentContainer}>
-            <Text style={styles.label}>NOTAS ADICIONALES:</Text>
+            <Text style={styles.label}>OBSERVACIONES FÍSICO-MECÁNICAS:</Text>
             <TextInput 
                 style={styles.input} 
                 multiline 
-                placeholder="Describe cualquier anomalía..." 
+                placeholder="Detalla llantas bajas, mangueras rozando, luces fundidas..." 
                 placeholderTextColor="#475569"
                 value={comentarios}
                 onChangeText={setComentarios}
@@ -219,7 +231,7 @@ export default function InspeccionVisual() {
       {guardando && (
           <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color={COLORS.goldBevel} />
-              <Text style={styles.loadingText}>GUARDANDO...</Text>
+              <Text style={styles.loadingText}>GENERANDO REPORTE...</Text>
           </View>
       )}
 
@@ -230,7 +242,7 @@ export default function InspeccionVisual() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: { paddingTop: Platform.OS === 'ios' ? 70 : 50, paddingHorizontal: 15, paddingBottom: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.textGold, letterSpacing: 1 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textGold, letterSpacing: 1 },
   backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { padding: 15, paddingBottom: 50 },
   selectorWrapper: { flexDirection: 'row', backgroundColor: '#031426', borderRadius: 12, padding: 6, borderWidth: 1.5, borderColor: COLORS.border, marginBottom: 20 },

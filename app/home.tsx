@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, StatusBar, 
-  Image, ScrollView, Alert, ActivityIndicator, Platform
+  Image, ScrollView, Alert, ActivityIndicator, Platform, Modal
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,6 +19,7 @@ const COLORS = {
   textWelcome: '#9DA8B5', 
   goldBevel: '#D4AF37', 
   white: '#FFFFFF',
+  danger: '#ef4444'
 };
 
 const GRADIENTS = {
@@ -33,6 +34,9 @@ export default function Home() {
   const [usuario, setUsuario] = useState<any>(null);
   const [esPremium, setEsPremium] = useState(false);
   const [loadingGPS, setLoadingGPS] = useState(false);
+  
+  // NUEVO ESTADO PARA EL MODAL DE GOOGLE
+  const [showLocationModal, setShowLocationModal] = useState(false);
 
   useEffect(() => {
     cargarUsuario();
@@ -57,7 +61,7 @@ export default function Home() {
   };
 
   // =========================================================================
-  // LÓGICA DE INICIO DE JORNADA (CORREGIDA CON RUTA REAL)
+  // LÓGICA DE INICIO DE JORNADA (INTERCEPTADA PARA GOOGLE PLAY)
   // =========================================================================
   const handleIniciarJornada = async () => {
     try {
@@ -65,9 +69,8 @@ export default function Home() {
       
       const d = new Date();
       const hoyLocal = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
-      
-      console.log("DEBUG - Hoy es:", hoyLocal);
 
+      // EL FLUJO OBLIGATORIO NO SE TOCA: Sigue mandando a /inspeccionVisual
       if (!ultimaInspeccion) {
         router.push('/inspeccionVisual');
         return;
@@ -75,7 +78,6 @@ export default function Home() {
 
       const fechaGuardada = ultimaInspeccion.substring(0, 10);
       
-      // Validamos contra hoy o el bug de UTC (5 de abril)
       if (fechaGuardada === hoyLocal || ultimaInspeccion.includes("2026-04-05")) {
          console.log("DEBUG - Acceso concedido.");
       } else {
@@ -83,12 +85,41 @@ export default function Home() {
         return;
       }
 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        // CAMBIO AQUÍ: Regresamos a la ruta de tu archivo real
+      // CAMBIO PARA GOOGLE: Verificamos silenciosamente si ya tiene AMBOS permisos
+      const { status: fgStatus } = await Location.getForegroundPermissionsAsync();
+      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+
+      if (fgStatus === 'granted' && bgStatus === 'granted') {
+        // Si ya tiene todo, se va directo a su ruta
         router.push('/jornadaEnCurso'); 
       } else {
-        Alert.alert("GPS Necesario", "Acepta los permisos para continuar.");
+        // Si le falta alguno, mostramos el aviso destacado
+        setShowLocationModal(true);
+      }
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  // NUEVA FUNCIÓN PARA PROCESAR LA ACEPTACIÓN DEL MODAL
+  const handleAceptarPermisos = async () => {
+    setShowLocationModal(false); // Escondemos el aviso
+    
+    try {
+      // 1. Pedimos permiso en primer plano
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      
+      if (fgStatus === 'granted') {
+        // 2. Si aceptó, pedimos el de segundo plano
+        const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+        
+        if (bgStatus === 'granted') {
+          router.push('/jornadaEnCurso'); // Todo listo, arranca el viaje
+        } else {
+          Alert.alert("Aviso", "El permiso en segundo plano es necesario para registrar la ruta según la NOM-087.");
+        }
+      } else {
+        Alert.alert("GPS Necesario", "Acepta los permisos de ubicación para continuar.");
       }
     } catch (e) {
       console.log(e);
@@ -158,7 +189,8 @@ export default function Home() {
 
         <View style={styles.grid}>
           <MenuCard title="Mi Jornada" icon="steering" type="mc" onPress={handleIniciarJornada} />
-          <MenuCard title="Inspección Visual" icon="clipboard-check-outline" type="mc" onPress={() => router.push('/inspeccionVisual')} />
+          {/* 🛠️ EL ÚNICO CAMBIO: Este botón ahora va a HistorialInspecciones */}
+          <MenuCard title="Inspección Visual" icon="clipboard-check-outline" type="mc" onPress={() => router.push('/HistorialInspecciones')} />
           <MenuCard title="Historial" icon="history" type="mi" onPress={() => router.push('/historial')} />
           <MenuCard title="Diesel Calc" icon="calculator" type="mc" onPress={() => router.push('/calculadora')} />
           <MenuCard title="Mi Perfil" icon="account-settings" type="mc" onPress={() => router.push('/perfil')} />
@@ -189,6 +221,13 @@ export default function Home() {
         )}
         
       </ScrollView>
+
+      {/* COMPONENTE MODAL DE GOOGLE INYECTADO AQUÍ */}
+      <ProminentDisclosureModal 
+        isVisible={showLocationModal} 
+        onAccept={handleAceptarPermisos} 
+        onDecline={() => setShowLocationModal(false)} 
+      />
     </View>
   );
 }
@@ -210,6 +249,56 @@ const MenuCard = ({ title, icon, type, onPress }: any) => (
   </TouchableOpacity>
 );
 
+// =========================================================================
+// COMPONENTE: AVISO DESTACADO PARA CUMPLIR CON GOOGLE PLAY
+// =========================================================================
+const ProminentDisclosureModal = ({ isVisible, onAccept, onDecline }: any) => (
+  <Modal visible={isVisible} animationType="slide" transparent={false}>
+    <View style={stylesModal.mainContainer}>
+      <ScrollView style={stylesModal.container}>
+        <Text style={stylesModal.title}>PERMISO DE UBICACIÓN Y PRIVACIDAD</Text>
+        
+        <View style={stylesModal.alertBox}>
+          <Text style={stylesModal.alertText}>
+            IMPORTANTE: Bitácora 57 requiere acceso a su ubicación en todo momento durante el viaje.
+          </Text>
+        </View>
+
+        <Text style={stylesModal.parrafo}>
+          Para cumplir con la <Text style={{fontWeight: 'bold'}}>NOM-087-SCT-2-2017</Text>, esta aplicación recopila datos de ubicación para permitir el rastreo exacto de sus rutas, cálculo de velocidades y zonas de manejo.
+        </Text>
+
+        <Text style={stylesModal.highlight}>
+          Estos datos se recopilan incluso cuando la aplicación está cerrada o no se está utilizando (ubicación en segundo plano).
+        </Text>
+
+        <Text style={stylesModal.subtitle}>¿Por qué es necesario?</Text>
+        <Text style={stylesModal.parrafo}>
+          • Garantizar que sus registros de manejo sean precisos para la Guardia Nacional.{"\n"}
+          • Generar reportes PDF con códigos QR verificables.{"\n"}
+          • Monitoreo logístico de la flota para zonas seguras.
+        </Text>
+
+        <Text style={stylesModal.subtitle}>Protección de Datos</Text>
+        <Text style={stylesModal.parrafo}>
+          La ubicación y datos de identidad solo se comparten con las autoridades competentes en caso de inspección o con su centro de monitoreo autorizado.
+        </Text>
+      </ScrollView>
+
+      <View style={stylesModal.buttonArea}>
+        <TouchableOpacity style={stylesModal.acceptButton} onPress={onAccept}>
+          <Text style={stylesModal.buttonText}>ACEPTAR Y CONTINUAR</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={stylesModal.declineButton} onPress={onDecline}>
+          <Text style={[stylesModal.buttonText, {color: COLORS.textWelcome}]}>AHORA NO</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+);
+
+// Estilos originales
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
@@ -280,4 +369,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1E4A75',
   }
+});
+
+// Estilos específicos para el Modal de Privacidad
+const stylesModal = StyleSheet.create({
+  mainContainer: { flex: 1, backgroundColor: COLORS.bg },
+  container: { padding: 20, marginTop: 40 },
+  alertBox: { backgroundColor: '#1e293b', padding: 15, borderRadius: 8, marginBottom: 15, borderLeftWidth: 4, borderLeftColor: COLORS.goldBevel },
+  alertText: { color: COLORS.goldBevel, fontWeight: 'bold', fontSize: 13 },
+  title: { color: COLORS.goldBevel, fontWeight: 'bold', fontSize: 18, marginBottom: 20, textAlign: 'center' },
+  subtitle: { color: COLORS.goldBevel, fontWeight: 'bold', fontSize: 15, marginTop: 15, marginBottom: 5 },
+  parrafo: { color: COLORS.textWelcome, fontSize: 13, lineHeight: 20, textAlign: 'justify' },
+  highlight: { color: COLORS.white, fontSize: 13, fontWeight: 'bold', marginTop: 15, fontStyle: 'italic', textAlign: 'center' },
+  buttonArea: { padding: 20, borderTopWidth: 1, borderTopColor: '#1e293b' },
+  acceptButton: { backgroundColor: COLORS.goldBevel, padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 10 },
+  declineButton: { padding: 10, alignItems: 'center' },
+  buttonText: { color: COLORS.bg, fontWeight: 'bold', fontSize: 15 }
 });

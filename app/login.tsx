@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, ImageBackground, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, ImageBackground, StatusBar, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location'; // Importante para la verificación
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { loginUsuario, registrarUsuario, loginConGoogle } from '../db/database';
 import { auth } from '../src/services/firebaseConfig';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { AvisoTexto } from '../src/components/AvisoPrivacidad';
+import AvisoTexto from '../src/components/AvisoPrivacidad';
 
 const BACKGROUND_IMAGE = require('../assets/images/kenworth.png');
 
@@ -21,7 +22,6 @@ const COLORS = {
   disabled: '#475569'
 };
 
-
 export default function Login() {
   const router = useRouter();
   const [isRegistering, setIsRegistering] = useState(false);
@@ -32,6 +32,36 @@ export default function Login() {
 
   const [aceptoPrivacidad, setAceptoPrivacidad] = useState(false);
   const [showAviso, setShowAviso] = useState(false);
+
+  // --- LÓGICA DE CUMPLIMIENTO GOOGLE PLAY ---
+  const [showDisclosure, setShowDisclosure] = useState(false);
+
+  useEffect(() => {
+    checkPermissionsOnStartup();
+  }, []);
+
+  const checkPermissionsOnStartup = async () => {
+    const { status: fgStatus } = await Location.getForegroundPermissionsAsync();
+    const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+    
+    // Si falta alguno, disparamos el aviso prominente de inmediato
+    if (fgStatus !== 'granted' || bgStatus !== 'granted') {
+      setShowDisclosure(true);
+    }
+  };
+
+  const handleAcceptDisclosure = async () => {
+    setShowDisclosure(false);
+    try {
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (fgStatus === 'granted') {
+        await Location.requestBackgroundPermissionsAsync();
+      }
+    } catch (e) {
+      console.log("Error al pedir permisos:", e);
+    }
+  };
+  // ------------------------------------------
 
   const validarPasswordRegistro = (pass: string) => {
     if (pass.length < 8) return "Debe tener al menos 8 caracteres.";
@@ -45,25 +75,15 @@ export default function Login() {
 
   const handleForgotPassword = async () => {
     if (!usuario) {
-      Alert.alert("Requerido", "Por favor escribe tu correo electrónico en el campo de 'Usuario/Email' para enviarte el enlace de recuperación.");
+      Alert.alert("Requerido", "Escribe tu correo en el campo de 'Usuario/Email' para enviarte el enlace.");
       return;
     }
-    if (!usuario.includes('@')) {
-      Alert.alert("Error", "Ingresa un correo válido.");
-      return;
-    }
-
     try {
       setLoading(true);
-      await sendPasswordResetEmail(auth, usuario);
-      Alert.alert("Correo Enviado", "Revisa tu bandeja de entrada (y spam). Te enviamos un enlace para restablecer tu contraseña.");
+      await sendPasswordResetEmail(auth, usuario.trim().toLowerCase());
+      Alert.alert("Enviado", "Revisa tu correo para restablecer tu contraseña.");
     } catch (error: any) {
-      console.log(error);
-      if (error.code === 'auth/user-not-found') {
-        Alert.alert("Error", "Ese correo no está registrado en Bitácora 57.");
-      } else {
-        Alert.alert("Error", "No se pudo enviar el correo. Intenta más tarde.");
-      }
+      Alert.alert("Error", "No se pudo enviar el correo de recuperación.");
     } finally {
       setLoading(false);
     }
@@ -74,49 +94,35 @@ export default function Login() {
       Alert.alert("Aviso de Privacidad", "Debes aceptar el aviso de privacidad para continuar.");
       return;
     }
-
     const correoNormalizado = usuario.trim().toLowerCase();
-
     if (!correoNormalizado || !password) {
-      Alert.alert("Error", "Faltan datos. Por favor llena todos los campos.");
+      Alert.alert("Error", "Faltan datos.");
       return;
-    }
-
-    if (isRegistering) {
-      const errorPassword = validarPasswordRegistro(password);
-      if (errorPassword) {
-        Alert.alert(
-          "Contraseña Insegura",
-          `La contraseña no cumple la política de seguridad.\n\n${errorPassword}`
-        );
-        return;
-      }
-      if (!nombre) {
-        Alert.alert("Error", "Por favor ingresa tu nombre.");
-        return;
-      }
     }
 
     setLoading(true);
     try {
       if (isRegistering) {
+        if (!nombre) { Alert.alert("Error", "Ingresa tu nombre."); setLoading(false); return; }
+        const errorPassword = validarPasswordRegistro(password);
+        if (errorPassword) { Alert.alert("Seguridad", errorPassword); setLoading(false); return; }
+        
         const newId = await registrarUsuario(nombre, correoNormalizado, password);
         if (newId) {
-          Alert.alert("Bienvenido", "Cuenta creada exitosamente. Ya puedes iniciar sesión.");
+          Alert.alert("Éxito", "Cuenta creada. Ya puedes entrar.");
           setIsRegistering(false);
-        }
-        else Alert.alert("Error", "El usuario ya existe.");
+        } else Alert.alert("Error", "El usuario ya existe.");
       } else {
         const user = await loginUsuario(correoNormalizado, password);
         if (user) {
           await AsyncStorage.setItem('USER_SESSION', JSON.stringify(user));
           router.replace('/home');
+        } else {
+          Alert.alert("Error", "Credenciales incorrectas.");
         }
-        else { Alert.alert("Acceso Denegado", "Usuario o contraseña incorrectos."); }
       }
     } catch (e) {
-      console.error(e);
-      Alert.alert("Error", "Ocurrió un problema de conexión.");
+      Alert.alert("Error", "Fallo de conexión.");
     } finally {
       setLoading(false);
     }
@@ -124,60 +130,34 @@ export default function Login() {
 
   const signInWithGoogle = async () => {
     if (!aceptoPrivacidad) {
-      Alert.alert("Aviso de Privacidad", "Acepta los términos antes de usar Google.");
+      Alert.alert("Privacidad", "Acepta los términos antes de usar Google.");
       return;
     }
     setLoading(true);
     try {
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
-      console.log('google sign-in result', userInfo);
-
-      const perfil =
-        userInfo.data?.user ||
-        userInfo;
-
-      if (!perfil) {
-        Alert.alert("Error Google", "No se obtuvo información del usuario desde Google.");
-        return;
-      }
-
+      const perfil = userInfo.data?.user || userInfo;
       const dbUser = await loginConGoogle(perfil);
       if (dbUser) {
         await AsyncStorage.setItem('USER_SESSION', JSON.stringify(dbUser));
         router.replace('/home');
-      } else {
-        Alert.alert("Error", "No se pudo iniciar sesión con la cuenta de Google.");
       }
     } catch (error: any) {
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        console.log("Sign‑in cancelado por el usuario");
-      } else if (error.code === statusCodes.IN_PROGRESS) {
-        console.log("Sign‑in en progreso");
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        Alert.alert("Error Google", "Los servicios de Google Play no están disponibles o necesitan actualización.");
-      } else {
-        console.error("Error Google:", error);
-        Alert.alert("Error Google", "No se pudo conectar con Google. Verifica tu conexión.");
-      }
+      console.log("Error Google:", error);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-
-    <ImageBackground
-      source={BACKGROUND_IMAGE}
-      style={styles.backgroundImage}
-      resizeMode="cover"
-    >
+    <ImageBackground source={BACKGROUND_IMAGE} style={styles.backgroundImage} resizeMode="cover">
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
       <View style={styles.overlay}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <View style={styles.iconCircle}><MaterialCommunityIcons name="truck-fast" size={40} color={COLORS.primary} /></View>
+            <View style={styles.iconCircle}><MaterialCommunityIcons name="truck-fast" size={40} color={COLORS.bg} /></View>
             <Text style={styles.title}>BITÁCORA <Text style={{ color: COLORS.primary }}>57</Text></Text>
             <Text style={styles.subtitle}>ACCESO OPERADORES</Text>
           </View>
@@ -186,35 +166,33 @@ export default function Login() {
             <Text style={styles.formTitle}>{isRegistering ? "Crear Cuenta" : "Iniciar Sesión"}</Text>
 
             {isRegistering && (
-              <View style={styles.inputContainer}><MaterialCommunityIcons name="account" size={20} color={COLORS.subtext} style={styles.icon} /><TextInput placeholder="Nombre Completo" placeholderTextColor={COLORS.subtext} style={styles.input} value={nombre} onChangeText={setNombre} /></View>
+              <View style={styles.inputContainer}>
+                <MaterialCommunityIcons name="account" size={20} color={COLORS.subtext} style={styles.icon} />
+                <TextInput placeholder="Nombre Completo" placeholderTextColor={COLORS.subtext} style={styles.input} value={nombre} onChangeText={setNombre} />
+              </View>
             )}
 
-            <View style={styles.inputContainer}><MaterialCommunityIcons name="email" size={20} color={COLORS.subtext} style={styles.icon} /><TextInput placeholder="Correo Electrónico" placeholderTextColor={COLORS.subtext} style={styles.input} value={usuario} onChangeText={setUsuario} keyboardType="email-address" autoCapitalize="none" /></View>
+            <View style={styles.inputContainer}>
+              <MaterialCommunityIcons name="email" size={20} color={COLORS.subtext} style={styles.icon} />
+              <TextInput placeholder="Correo Electrónico" placeholderTextColor={COLORS.subtext} style={styles.input} value={usuario} onChangeText={setUsuario} keyboardType="email-address" autoCapitalize="none" />
+            </View>
 
-            <View style={styles.inputContainer}><MaterialCommunityIcons name="lock" size={20} color={COLORS.subtext} style={styles.icon} /><TextInput placeholder="Contraseña segura (mín 8, Aa1@)" placeholderTextColor={COLORS.subtext} style={styles.input} value={password} onChangeText={setPassword} secureTextEntry /></View>
-
-            {isRegistering && (
-              <Text style={{ color: COLORS.subtext, fontSize: 11, marginTop: -6, marginBottom: 10 }}>
-                Usa 8+ caracteres con mayúscula, minúscula, número y símbolo.
-              </Text>
-            )}
+            <View style={styles.inputContainer}>
+              <MaterialCommunityIcons name="lock" size={20} color={COLORS.subtext} style={styles.icon} />
+              <TextInput placeholder="Contraseña" placeholderTextColor={COLORS.subtext} style={styles.input} value={password} onChangeText={setPassword} secureTextEntry />
+            </View>
 
             {!isRegistering && (
-              <TouchableOpacity onPress={handleForgotPassword} style={{ alignSelf: 'flex-end', marginBottom: 15, marginTop: -5 }}>
-                <Text style={{ color: COLORS.primary, fontSize: 13, textDecorationLine: 'underline' }}>
-                  ¿Olvidaste tu contraseña?
-                </Text>
+              <TouchableOpacity onPress={handleForgotPassword} style={{ alignSelf: 'flex-end', marginBottom: 15 }}>
+                <Text style={{ color: COLORS.primary, fontSize: 13 }}>¿Olvidaste tu contraseña?</Text>
               </TouchableOpacity>
             )}
 
             <View style={styles.privacyRow}>
-              <TouchableOpacity
-                onPress={() => setAceptoPrivacidad(!aceptoPrivacidad)}
-                style={[styles.checkbox, aceptoPrivacidad && styles.checkboxChecked]}
-              >
+              <TouchableOpacity onPress={() => setAceptoPrivacidad(!aceptoPrivacidad)} style={[styles.checkbox, aceptoPrivacidad && styles.checkboxChecked]}>
                 {aceptoPrivacidad && <MaterialCommunityIcons name="check" size={16} color={COLORS.bg} />}
               </TouchableOpacity>
-              <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap' }}>
+              <View style={{ flex: 1, flexDirection: 'row' }}>
                 <Text style={styles.privacyText}>Acepto el </Text>
                 <TouchableOpacity onPress={() => setShowAviso(true)}>
                   <Text style={styles.privacyLink}>Aviso de Privacidad</Text>
@@ -222,26 +200,16 @@ export default function Login() {
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.btnPrimary, !aceptoPrivacidad && { backgroundColor: COLORS.disabled }]}
-              onPress={handleAction}
-              disabled={loading || !aceptoPrivacidad}
-            >
+            <TouchableOpacity style={[styles.btnPrimary, !aceptoPrivacidad && { backgroundColor: COLORS.disabled }]} onPress={handleAction} disabled={loading || !aceptoPrivacidad}>
               {loading ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>{isRegistering ? "REGISTRARSE" : "ENTRAR"}</Text>}
             </TouchableOpacity>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 20 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.border }} />
-              <Text style={{ color: COLORS.subtext, marginHorizontal: 10 }}>O continúa con</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.border }} />
+            <View style={styles.divider}>
+               <View style={styles.line} /><Text style={styles.dividerText}>O continúa con</Text><View style={styles.line} />
             </View>
 
-            <TouchableOpacity
-              style={[styles.btnGoogle, !aceptoPrivacidad && { opacity: 0.5 }]}
-              onPress={signInWithGoogle}
-              disabled={loading || !aceptoPrivacidad}
-            >
-              <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png' }} style={{ width: 24, height: 24, marginRight: 10 }} />
+            <TouchableOpacity style={[styles.btnGoogle, !aceptoPrivacidad && { opacity: 0.5 }]} onPress={signInWithGoogle} disabled={loading || !aceptoPrivacidad}>
+              <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png' }} style={{ width: 20, height: 20, marginRight: 10 }} />
               <Text style={styles.googleText}>Google</Text>
             </TouchableOpacity>
 
@@ -251,64 +219,114 @@ export default function Login() {
           </View>
         </View>
 
+        {/* --- MODAL DE PRIVACIDAD ESTÁNDAR --- */}
         <Modal visible={showAviso} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Aviso de Privacidad</Text>
-                <TouchableOpacity onPress={() => setShowAviso(false)}>
-                  <MaterialCommunityIcons name="close" size={24} color="white" />
-                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Privacidad</Text>
+                <TouchableOpacity onPress={() => setShowAviso(false)}><MaterialCommunityIcons name="close" size={24} color="white" /></TouchableOpacity>
               </View>
               <AvisoTexto />
-              <TouchableOpacity style={styles.btnModal} onPress={() => setShowAviso(false)}>
-                <Text style={styles.btnText}>ENTENDIDO Y ACEPTAR</Text>
+              <TouchableOpacity style={styles.btnModal} onPress={() => setShowAviso(false)}><Text style={styles.btnText}>CERRAR</Text></TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* --- MODAL DE DIVULGACIÓN PROMINENTE (GOOGLE PLAY) --- */}
+        <Modal visible={showDisclosure} animationType="fade" transparent={false}>
+          <View style={stylesModal.mainContainer}>
+            <ScrollView contentContainerStyle={stylesModal.container}>
+              <View style={stylesModal.iconHeader}>
+                 <MaterialCommunityIcons name="map-marker-radius" size={60} color={COLORS.primary} />
+              </View>
+              <Text style={stylesModal.title}>PERMISO DE UBICACIÓN Y PRIVACIDAD</Text>
+              
+              <View style={stylesModal.alertBox}>
+                <Text style={stylesModal.alertText}>
+                  Bitácora 57 recopila datos de ubicación para permitir el rastreo de sus rutas, cálculo de velocidades y cumplimiento de la NOM-087-SCT, incluso cuando la aplicación está cerrada o no se está utilizando (ubicación en segundo plano).
+                </Text>
+              </View>
+
+              <Text style={stylesModal.parrafo}>
+                Este acceso es vital para garantizar que sus registros ante la Guardia Nacional sean precisos y válidos legalmente durante las inspecciones en carretera.
+              </Text>
+
+              <Text style={stylesModal.subtitle}>¿Por qué ubicación en segundo plano?</Text>
+              <Text style={stylesModal.parrafo}>
+                • Registro continuo de la jornada sin interrupciones.{"\n"}
+                • Generación de códigos QR verificables por la autoridad.{"\n"}
+                • Seguridad logística en zonas críticas.
+              </Text>
+
+              <Text style={stylesModal.footerNote}>
+                Sus datos de ubicación son privados y solo se comparten con las autoridades competentes en caso de una inspección oficial.
+              </Text>
+            </ScrollView>
+
+            <View style={stylesModal.buttonArea}>
+              <TouchableOpacity style={stylesModal.acceptButton} onPress={handleAcceptDisclosure}>
+                <Text style={stylesModal.buttonTextAccept}>ACEPTAR Y CONTINUAR</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={stylesModal.declineButton} onPress={() => setShowDisclosure(false)}>
+                <Text style={stylesModal.buttonTextDecline}>AHORA NO</Text>
               </TouchableOpacity>
             </View>
           </View>
         </Modal>
+
       </View>
     </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.70)',
-    justifyContent: 'center',
-  },
-  content: { padding: 30 },
-  header: { alignItems: 'center', marginBottom: 30 },
-  iconCircle: { width: 80, height: 80, borderRadius: 20, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 15, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.30, shadowRadius: 4.65, elevation: 8 },
-  title: { fontSize: 28, fontWeight: 'bold', color: 'white', textShadowColor: 'rgba(0, 0, 0, 0.75)', textShadowOffset: { width: -1, height: 1 }, textShadowRadius: 10 },
-  subtitle: { fontSize: 12, color: COLORS.subtext, letterSpacing: 2, fontWeight: 'bold' },
-  form: { backgroundColor: 'rgba(30, 41, 59, 0.90)', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
-  formTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 10, marginBottom: 15, paddingHorizontal: 15, height: 50, borderWidth: 1, borderColor: COLORS.border },
+  backgroundImage: { flex: 1, width: '100%', height: '100%' },
+  overlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.75)', justifyContent: 'center' },
+  content: { padding: 25 },
+  header: { alignItems: 'center', marginBottom: 25 },
+  iconCircle: { width: 70, height: 70, borderRadius: 18, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  title: { fontSize: 26, fontWeight: 'bold', color: 'white' },
+  subtitle: { fontSize: 11, color: COLORS.subtext, letterSpacing: 2, fontWeight: 'bold' },
+  form: { backgroundColor: 'rgba(30, 41, 59, 0.95)', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
+  formTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 10, marginBottom: 12, paddingHorizontal: 15, height: 50, borderWidth: 1, borderColor: COLORS.border },
   icon: { marginRight: 10 },
   input: { flex: 1, color: 'white' },
-  privacyRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5 },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: COLORS.primary, marginRight: 10, justifyContent: 'center', alignItems: 'center' },
+  privacyRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: COLORS.primary, marginRight: 10, justifyContent: 'center', alignItems: 'center' },
   checkboxChecked: { backgroundColor: COLORS.primary },
-  privacyText: { color: COLORS.subtext, fontSize: 13 },
-  privacyLink: { color: COLORS.primary, fontSize: 13, fontWeight: 'bold', textDecorationLine: 'underline' },
-  btnPrimary: { backgroundColor: COLORS.primary, height: 50, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
-  btnText: { color: COLORS.bg, fontWeight: 'bold', fontSize: 16 },
-  btnGoogle: { flexDirection: 'row', backgroundColor: 'white', height: 50, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  googleText: { color: '#333', fontWeight: 'bold', fontSize: 16 },
-  toggleBtn: { marginTop: 20, alignItems: 'center' },
-  toggleText: { color: COLORS.primary, fontSize: 14, fontWeight: 'bold' },
-  
+  privacyText: { color: COLORS.subtext, fontSize: 12 },
+  privacyLink: { color: COLORS.primary, fontSize: 12, fontWeight: 'bold', textDecorationLine: 'underline' },
+  btnPrimary: { backgroundColor: COLORS.primary, height: 50, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  btnText: { color: COLORS.bg, fontWeight: 'bold', fontSize: 15 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 15 },
+  line: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  dividerText: { color: COLORS.subtext, marginHorizontal: 10, fontSize: 12 },
+  btnGoogle: { flexDirection: 'row', backgroundColor: 'white', height: 45, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  googleText: { color: '#333', fontWeight: 'bold', fontSize: 14 },
+  toggleBtn: { marginTop: 15, alignItems: 'center' },
+  toggleText: { color: COLORS.primary, fontSize: 13, fontWeight: 'bold' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: COLORS.card, borderRadius: 20, padding: 20, maxHeight: '80%', borderWidth: 1, borderColor: COLORS.border },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   modalTitle: { color: COLORS.primary, fontSize: 18, fontWeight: 'bold' },
-  btnModal: { backgroundColor: COLORS.primary, padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10 }
+  btnModal: { backgroundColor: COLORS.primary, padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 10 }
+});
+
+const stylesModal = StyleSheet.create({
+  mainContainer: { flex: 1, backgroundColor: '#010A14' },
+  container: { padding: 25, paddingTop: 60, alignItems: 'center' },
+  iconHeader: { marginBottom: 20 },
+  title: { color: COLORS.primary, fontWeight: 'bold', fontSize: 18, marginBottom: 25, textAlign: 'center' },
+  alertBox: { backgroundColor: '#1e293b', padding: 20, borderRadius: 12, marginBottom: 20, borderLeftWidth: 5, borderLeftColor: COLORS.primary },
+  alertText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14, lineHeight: 22, textAlign: 'justify' },
+  subtitle: { color: COLORS.primary, fontWeight: 'bold', fontSize: 15, alignSelf: 'flex-start', marginTop: 15, marginBottom: 8 },
+  parrafo: { color: COLORS.subtext, fontSize: 13, lineHeight: 20, textAlign: 'justify', marginBottom: 12 },
+  footerNote: { color: '#FFFFFF', fontSize: 12, fontStyle: 'italic', marginTop: 20, textAlign: 'center', opacity: 0.8 },
+  buttonArea: { padding: 20, backgroundColor: '#010A14', borderTopWidth: 1, borderTopColor: '#1e293b' },
+  acceptButton: { backgroundColor: COLORS.primary, padding: 15, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
+  buttonTextAccept: { color: '#010A14', fontWeight: 'bold', fontSize: 15 },
+  declineButton: { padding: 10, alignItems: 'center' },
+  buttonTextDecline: { color: COLORS.subtext, fontSize: 14, fontWeight: 'bold' }
 });

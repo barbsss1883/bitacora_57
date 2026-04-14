@@ -11,27 +11,41 @@ import * as Crypto from 'expo-crypto';
 import { Picker } from '@react-native-picker/picker'; 
 import MapaRuta from './mapaRuta'; 
 import { iniciarRastreoBackground, detenerRastreo, obtenerDireccion, validarPermisosRastreoBackground, iniciarNotificacionTemporizador, detenerNotificacionTemporizador } from '../src/services/LocationService'; 
-import { iniciarNuevaJornada, finalizarJornada, insertarPausa, insertarIncidencia, obtenerDetalleJornada, vincularInspeccionAViaje, obtenerKmTotalesJornada } from '../db/database';
+import { iniciarNuevaJornada, finalizarJornada, insertarPausa, insertarIncidencia, obtenerDetalleJornada, vincularInspeccionAViaje, obtenerKmTotalesJornada, getDB } from '../db/database';
 import FirmaDigital from '../src/components/FirmaDigital';
 import { generarPDF } from '../src/services/PdfGenerator'; 
 import { db_firestore, storage } from '../src/services/firebaseConfig';
 import { doc, setDoc, serverTimestamp, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { supabase } from '../src/services/supabaseClient';
+import { LinearGradient } from 'expo-linear-gradient';
+import { calcularDistanciaTotalKm } from '../db/database';
 
 const COLORS = {
-  bg: '#010A14',           // Azul noche (Fondo principal de tu Home)
-  card: '#081D33',         // Azul marino (Para las tarjetas y modales)
-  primary: '#D4AF37',      // Dorado principal (goldBevel)
-  danger: '#A70000',       // Rojo profundo (De tu emergencyBg)
-  text: '#FFFFFF',         // Blanco puro para textos
-  subtext: '#9DA8B5',      // Azul grisáceo (textWelcome)
-  success: '#10B981',      // Verde brillante para confirmaciones
-  border: '#12365A',       // Azul de tus tarjetas para bordes sutiles
-  warning: '#C5A059',      // Dorado oscuro para alertas (textGold)
-  white: '#FFFFFF',        // Blanco puro
-  modalOverlay: 'rgba(1, 10, 20, 0.95)', // Fondo de tu Home con 95% de transparencia
-  police: '#3B82F6'        // Azul claro (Para distinguir reportes de policía/GN)
+  bg:           '#010A14',
+  card:         '#081D33',
+  primary:      '#D4AF37',
+  goldBevel:    '#D4AF37',
+  gold2:        '#C5A059',
+  danger:       '#A70000',
+  dangerBright: '#ef4444',
+  text:         '#FFFFFF',
+  subtext:      '#9DA8B5',
+  success:      '#10B981',
+  border:       '#12365A',
+  border2:      '#2A4A69',
+  warning:      '#C5A059',
+  white:        '#FFFFFF',
+  modalOverlay: 'rgba(1, 10, 20, 0.95)',
+  police:       '#3B82F6',
+};
+
+const GRADIENTS = {
+  cardBg:     ['#12365A', '#081D33', '#030E1A'] as const,
+  header:     ['#051C33', '#010A14'] as const,
+  saveBtn:    ['#D4AF37', '#C5A059', '#8A6E2F'] as const,
+  dangerBtn:  ['#A70000', '#7A0000', '#4A0000'] as const,
+  successBtn: ['#065F46', '#064E3B', '#022C22'] as const,
 };
 
 const TIPOS_INCIDENCIA = [
@@ -71,6 +85,7 @@ export default function JornadaEnCurso() {
   const [descIncidencia, setDescIncidencia] = useState('');
   const [tiempoManejo, setTiempoManejo] = useState('00:00:00');
   const [tiempoTotal, setTiempoTotal] = useState('00:00:00');
+  const [kmEnRuta, setKmEnRuta] = useState<number>(0);
 
   const urlVerificacion = jornadaId
     ? `https://bitacora57.com/validar?id=${jornadaId}`
@@ -91,7 +106,22 @@ export default function JornadaEnCurso() {
         setTiempoTotal(formatearTiempo(diff)); 
       }
     }, 1000);
-    return () => clearInterval(interval);
+
+    // ── Km en tiempo real: actualiza cada 30 seg desde SQLite ──
+    const kmInterval = setInterval(async () => {
+      if (!jornadaId) return;
+      try {
+        const db = await import('../db/database').then(m => m.getDB());
+        const puntos = await db.getAllAsync(
+          'SELECT latitud, longitud FROM puntos_gps WHERE jornada_id = ? ORDER BY id ASC',
+          [jornadaId]
+        );
+        const km = calcularDistanciaTotalKm(puntos as any[]);
+        setKmEnRuta(km);
+      } catch (_) {}
+    }, 30000);
+
+    return () => { clearInterval(interval); clearInterval(kmInterval); };
   }, [jornadaId, fechaInicio, enPausa]);
 
   useEffect(() => {
@@ -103,7 +133,7 @@ export default function JornadaEnCurso() {
           { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
           (location) => {
             const velocidad = location.coords.speed || 0;
-            if (velocidad > 4.16) { // aprox 15 km/h
+            if (velocidad > 4.16) { 
               terminarPausa();
               Alert.alert("Movimiento Detectado", "La pausa se ha quitado automáticamente al reanudar la marcha.");
             }
@@ -244,7 +274,6 @@ export default function JornadaEnCurso() {
       if (!dataFull.jornada) return;
       const { jornada, pausas, incidencias, inspecciones }: {jornada:any, pausas:any, incidencias:any, inspecciones:any[]} = dataFull;
 
-      // OJO: Usamos jornada.ruta_geojson (el Feature generado por finalizarJornada) si rutaJsonParam es nulo.
       const rutaFinalGeojson = rutaJsonParam || jornada.ruta_geojson;
 
       let inspeccionData: any = null;
@@ -301,7 +330,6 @@ export default function JornadaEnCurso() {
           }));
       }
 
-      // Procesamiento condicional para soportar el nuevo GeoJSON Feature y el viejo formato de arreglos
       if (rutaFinalGeojson) {
           try {
               const parsedData = JSON.parse(rutaFinalGeojson);
@@ -378,7 +406,6 @@ export default function JornadaEnCurso() {
         if (rutaFinalGeojson) {
             const parsedRuta = JSON.parse(rutaFinalGeojson);
             if (parsedRuta.type === 'Feature') {
-                // Preservamos velocidades y timestamps, agregando datos de negocio en el root de properties
                 featureGeoJSONParaSupabase = {
                     ...parsedRuta,
                     properties: {
@@ -391,7 +418,6 @@ export default function JornadaEnCurso() {
                     }
                 };
             } else if (Array.isArray(parsedRuta)) {
-                // Manejo del formato antiguo por retrocompatibilidad
                 featureGeoJSONParaSupabase = {
                     type: "Feature",
                     geometry: {
@@ -507,7 +533,7 @@ export default function JornadaEnCurso() {
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
 
-        <View style={styles.timerCardNew}>
+        <LinearGradient colors={GRADIENTS.cardBg} style={styles.timerCardNew}>
 
           <View style={styles.timerHeader}>
             <View style={{flexDirection:'row', alignItems:'center'}}>
@@ -551,28 +577,55 @@ export default function JornadaEnCurso() {
           </View>
           <View style={styles.progressBarBgNew}><View style={[styles.progressBarFillNew, { width: '30%', backgroundColor: enPausa ? COLORS.warning : COLORS.success }]} /></View>
           <View style={styles.progressLabels}><Text style={styles.progressLabelText}>INICIO</Text><Text style={styles.progressLabelText}>ALERTA 4.5H</Text><Text style={styles.progressLabelText}>LÍMITE 5H</Text></View>
+
           <View style={styles.dividerNew} />
-          <View style={styles.footerTimer}>
-             <Text style={styles.footerLabel}>Jornada Total Acumulada:</Text>
-             <View style={{flexDirection:'row', alignItems:'baseline'}}><Text style={styles.footerTimerText}>{tiempoTotal}</Text><Text style={styles.footerSubTimerText}> / 14:00:00</Text></View>
+
+          {/* ── KM en tiempo real ── */}
+          <View style={styles.kmRow}>
+            <View style={styles.kmItem}>
+              <MaterialCommunityIcons name="map-marker-distance" size={18} color={COLORS.goldBevel} />
+              <Text style={styles.kmLabel}>KM RECORRIDOS</Text>
+              <Text style={styles.kmValue}>{kmEnRuta.toFixed(1)} <Text style={styles.kmUnit}>km</Text></Text>
+            </View>
+            <View style={styles.kmDivider} />
+            <View style={styles.kmItem}>
+              <MaterialCommunityIcons name="clock-outline" size={18} color={COLORS.goldBevel} />
+              <Text style={styles.kmLabel}>JORNADA TOTAL</Text>
+              <View style={{flexDirection:'row', alignItems:'baseline'}}>
+                <Text style={styles.kmValue}>{tiempoTotal}</Text>
+                <Text style={styles.kmUnit}> / 14h</Text>
+              </View>
+            </View>
           </View>
-        </View>
+        </LinearGradient>
 
         <View style={styles.mapContainer}><MapaRuta key={jornadaId ? `viaje-${jornadaId}` : 'sin-viaje'} /></View>
       </ScrollView>
 
       <View style={styles.bottomBarBig}>
         {!jornadaId ? (
-          <TouchableOpacity style={[styles.btnBigBase, {backgroundColor: COLORS.primary}]} onPress={() => setModalRegistro(true)}>
-             <Text style={styles.btnBigTitle}>INICIAR JORNADA</Text><Text style={styles.btnBigSub}>Configurar nueva ruta y unidad</Text>
+          <TouchableOpacity style={styles.btnBigWrapper} onPress={() => setModalRegistro(true)}>
+            <LinearGradient colors={GRADIENTS.saveBtn} style={styles.btnBigBase}>
+              <Text style={styles.btnBigTitle}>INICIAR JORNADA</Text>
+              <Text style={styles.btnBigSub}>Configurar nueva ruta y unidad</Text>
+            </LinearGradient>
           </TouchableOpacity>
         ) : (
           <>
-            <TouchableOpacity style={[styles.btnBigBase, {backgroundColor: enPausa ? COLORS.success : COLORS.primary, marginRight: 10}]} onPress={() => enPausa ? terminarPausa() : setModalPausa(true)}>
-                <View style={{flexDirection:'row', alignItems:'center'}}><MaterialCommunityIcons name={enPausa ? "play" : "pause"} size={24} color="white" style={{marginRight:5}} /><Text style={styles.btnBigTitle}>{enPausa ? "REANUDAR" : "PAUSA"}</Text></View>
+            <TouchableOpacity style={[styles.btnBigWrapper, {marginRight: 10}]} onPress={() => enPausa ? terminarPausa() : setModalPausa(true)}>
+              <LinearGradient colors={enPausa ? GRADIENTS.successBtn : GRADIENTS.cardBg} style={[styles.btnBigBase, {borderWidth: 1.5, borderColor: enPausa ? COLORS.success : COLORS.border2}]}>
+                <View style={{flexDirection:'row', alignItems:'center'}}>
+                  <MaterialCommunityIcons name={enPausa ? "play" : "pause"} size={24} color="white" style={{marginRight:5}} />
+                  <Text style={styles.btnBigTitle}>{enPausa ? "REANUDAR" : "PAUSA"}</Text>
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.btnBigBase, {backgroundColor: COLORS.danger, flex: 0.6}]} onPress={pedirFirmaCierre}>
-                <View style={{flexDirection:'row', alignItems:'center'}}><Text style={styles.btnBigTitle}>FINALIZAR</Text></View>
+            <TouchableOpacity style={[styles.btnBigWrapper, {flex: 0.6}]} onPress={pedirFirmaCierre}>
+              <LinearGradient colors={GRADIENTS.dangerBtn} style={[styles.btnBigBase, {borderWidth: 1.5, borderColor: COLORS.danger}]}>
+                <View style={{flexDirection:'row', alignItems:'center'}}>
+                  <Text style={styles.btnBigTitle}>FINALIZAR</Text>
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
           </>
         )}
@@ -580,7 +633,7 @@ export default function JornadaEnCurso() {
 
       <Modal visible={modalRegistro} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <LinearGradient colors={['#0D2137', '#051C33', '#010A14']} style={styles.modalContent}>
                 <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom:15}}>
                     <Text style={styles.sectionHeader}>NUEVO VIAJE</Text>
                     <TouchableOpacity onPress={() => setModalRegistro(false)}><MaterialCommunityIcons name="close" size={24} color="#fff"/></TouchableOpacity>
@@ -658,11 +711,15 @@ export default function JornadaEnCurso() {
                     <InputDark label="Origen" val={formulario.origen} set={(t:string)=>setFormulario({...formulario, origen: t})} />
                     <InputDark label="Destino" val={formulario.destino} set={(t:string)=>setFormulario({...formulario, destino: t})} />
 
-                    <TouchableOpacity style={styles.btnFullOrange} onPress={iniciarViaje}><Text style={styles.btnText}>COMENZAR VIAJE Y RASTREO</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.btnFullOrangeWrapper} onPress={iniciarViaje}>
+                      <LinearGradient colors={GRADIENTS.saveBtn} style={styles.btnFullOrange}>
+                        <Text style={styles.btnText}>COMENZAR VIAJE Y RASTREO</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
                     <View style={{height:60}}/>
                 </ScrollView>
+               </LinearGradient>
             </View>
-        </View>
       </Modal>
       <Modal visible={modalPausa} transparent>
           <View style={[styles.modalOverlay, {justifyContent:'center'}]}>
@@ -693,7 +750,11 @@ export default function JornadaEnCurso() {
                       ))}
                   </View>
                   <InputDark label="Detalles Adicionales (Opcional)" val={descIncidencia} set={setDescIncidencia} multiline />
-                  <TouchableOpacity style={styles.btnFullOrange} onPress={reportarIncidencia}><Text style={styles.btnText}>ENVIAR REPORTE</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.btnFullOrangeWrapper} onPress={reportarIncidencia}>
+                    <LinearGradient colors={GRADIENTS.saveBtn} style={styles.btnFullOrange}>
+                      <Text style={styles.btnText}>ENVIAR REPORTE</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
                   <TouchableOpacity onPress={()=>setModalIncidencia(false)} style={{marginTop:20, alignSelf:'center'}}><Text style={{color:COLORS.subtext}}>Cancelar</Text></TouchableOpacity>
               </View>
           </View>
@@ -730,39 +791,94 @@ const InputDark = ({ label, val, set, placeholder, flex, multiline }: any) => (
 );
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  timerCardNew: { margin: 20, padding: 20, borderRadius: 16, backgroundColor: COLORS.card, elevation: 8 },
-  timerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  cardLabelNew: { color: COLORS.subtext, fontSize: 12, fontWeight: '600' },
-  statusBadgeNew: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  statusTextNew: { color: COLORS.bg, fontSize: 12, fontWeight: 'bold' },
-  btnReportarNew: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: COLORS.warning },
-  txtReportarNew: { color: COLORS.warning, fontSize: 12, fontWeight: 'bold', marginLeft: 5 },
+  container:          { flex: 1, backgroundColor: COLORS.bg },
+
+  // Timer card
+  timerCardNew: {
+    margin: 16, borderRadius: 16, overflow: 'hidden',
+    borderWidth: 1.5, borderColor: COLORS.border2,
+    padding: 20, elevation: 8,
+  },
+  timerHeader:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  cardLabelNew:       { color: COLORS.subtext, fontSize: 12, fontWeight: '600', letterSpacing: 1 },
+  statusBadgeNew:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  statusTextNew:      { color: COLORS.bg, fontSize: 12, fontWeight: 'bold' },
+  btnReportarNew: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20, borderWidth: 1, borderColor: COLORS.warning,
+    backgroundColor: 'rgba(197,160,89,0.08)',
+  },
+  txtReportarNew:     { color: COLORS.warning, fontSize: 12, fontWeight: 'bold', marginLeft: 5 },
   mainTimerContainer: { marginVertical: 15 },
-  mainTimerText: { color: COLORS.white, fontSize: 48, fontWeight: 'bold' },
-  subTimerText: { color: COLORS.subtext, fontSize: 18, marginLeft: 5 },
-  progressBarBgNew: { height: 6, backgroundColor: '#0f172a', borderRadius: 3, marginTop: 5 },
+  mainTimerText:      { color: COLORS.white, fontSize: 48, fontWeight: 'bold' },
+  subTimerText:       { color: COLORS.subtext, fontSize: 18, marginLeft: 5 },
+  progressBarBgNew:   { height: 6, backgroundColor: '#0f172a', borderRadius: 3, marginTop: 5 },
   progressBarFillNew: { height: 6, borderRadius: 3 },
-  progressLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
-  progressLabelText: { color: COLORS.subtext, fontSize: 10 },
-  dividerNew: { height: 1, backgroundColor: '#334155', marginVertical: 15 },
-  footerTimer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  footerLabel: { color: COLORS.subtext, fontSize: 14 },
-  footerTimerText: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
+  progressLabels:     { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
+  progressLabelText:  { color: COLORS.subtext, fontSize: 10 },
+  dividerNew:         { height: 1, backgroundColor: COLORS.border, marginVertical: 15 },
+
+  // KM en tiempo real
+  kmRow: {
+    flexDirection: 'row', alignItems: 'center',
+  },
+  kmItem:   { flex: 1, alignItems: 'center', gap: 4 },
+  kmDivider:{ width: 1, height: 40, backgroundColor: COLORS.border },
+  kmLabel:  { color: COLORS.subtext, fontSize: 10, letterSpacing: 1, marginTop: 2 },
+  kmValue:  { color: COLORS.goldBevel, fontSize: 22, fontWeight: 'bold' },
+  kmUnit:   { color: COLORS.subtext, fontSize: 12, fontWeight: 'normal' },
+
+  // Map
+  mapContainer: {
+    marginHorizontal: 16, borderRadius: 16, overflow: 'hidden',
+    borderWidth: 1.5, borderColor: COLORS.border2, height: 350,
+  },
+
+  // Bottom bar
+  bottomBarBig: {
+    position: 'absolute', bottom: 0, width: '100%',
+    flexDirection: 'row', padding: 15, paddingBottom: 25,
+    backgroundColor: COLORS.bg,
+    borderTopWidth: 1, borderTopColor: COLORS.border,
+  },
+  btnBigWrapper:  { flex: 1, borderRadius: 12, overflow: 'hidden' },
+  btnBigBase:     { flex: 1, borderRadius: 12, padding: 15, justifyContent: 'center' },
+  btnBigTitle:    { color: COLORS.white, fontWeight: 'bold', fontSize: 16 },
+  btnBigSub:      { color: 'rgba(255,255,255,0.7)', fontSize: 10, marginTop: 2 },
+
+  // Modals
+  modalOverlay:   { flex: 1, backgroundColor: COLORS.modalOverlay, justifyContent: 'flex-end' },
+  modalContent: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, maxHeight: '90%',
+    borderTopWidth: 1, borderColor: COLORS.border2,
+  },
+  sectionHeader:  { fontSize: 18, fontWeight: 'bold', color: COLORS.goldBevel, marginBottom: 15, letterSpacing: 1 },
+  labelSection:   { color: COLORS.white, fontWeight: 'bold', marginTop: 15, marginBottom: 5 },
+  input: {
+    backgroundColor: COLORS.bg, color: COLORS.text,
+    borderRadius: 8, padding: 10,
+    borderWidth: 1, borderColor: COLORS.border2,
+  },
+  row:            { flexDirection: 'row', justifyContent: 'space-between' },
+  pickerBox: {
+    backgroundColor: COLORS.bg, borderRadius: 8,
+    borderWidth: 1, borderColor: COLORS.border2,
+    marginBottom: 10, overflow: 'hidden',
+  },
+  chip: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.border, paddingVertical: 8,
+    paddingHorizontal: 12, borderRadius: 20,
+  },
+  btnFullOrangeWrapper: { borderRadius: 10, overflow: 'hidden', marginTop: 15 },
+  btnFullOrange:        { padding: 15, alignItems: 'center' },
+  btnText:              { fontWeight: 'bold', color: '#010A14', fontSize: 15 },
+
+  // Estilos heredados usados en el footer del timer (por si quedan referencias)
+  footerTimer:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  footerLabel:        { color: COLORS.subtext, fontSize: 14 },
+  footerTimerText:    { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
   footerSubTimerText: { color: COLORS.subtext, fontSize: 14, marginLeft: 5 },
-  mapContainer: { marginHorizontal: 20, backgroundColor: COLORS.card, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, height: 350 },
-  bottomBarBig: { position: 'absolute', bottom: 0, width: '100%', flexDirection: 'row', padding: 15, paddingBottom: 25, backgroundColor: COLORS.bg },
-  btnBigBase: { flex: 1, borderRadius: 12, padding: 15, justifyContent: 'center' },
-  btnBigTitle: { color: COLORS.white, fontWeight: 'bold', fontSize: 16 },
-  btnBigSub: { color: 'rgba(255,255,255,0.7)', fontSize: 10, marginTop: 2 },
-  modalOverlay: { flex: 1, backgroundColor: COLORS.modalOverlay, justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: COLORS.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '90%' },
-  sectionHeader: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary, marginBottom: 15 },
-  labelSection: { color: COLORS.white, fontWeight: 'bold', marginTop: 15, marginBottom: 5 },
-  input: { backgroundColor: COLORS.bg, color: COLORS.text, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: COLORS.border },
-  row: { flexDirection: 'row', justifyContent: 'space-between' },
-  pickerBox: { backgroundColor: COLORS.bg, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, marginBottom: 10, overflow: 'hidden' }, // Estilo para los menús
-  chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.border, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20 },
-  btnFullOrange: { backgroundColor: COLORS.primary, padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 15 },
-  btnText: { fontWeight: 'bold', color: '#000' },
 });
