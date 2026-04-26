@@ -1,35 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
-  Alert, Modal, ScrollView
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Mapbox from '@rnmapbox/maps';
-import Purchases from 'react-native-purchases';
-
+// ✅ CAMBIADO: PdfGenerator → PdfMaestro
+// Se eliminó: import Purchases (la validación PRO está dentro de PdfMaestro)
+import { generarPdfMaestro } from '../src/services/PdfMaestro';
 import { obtenerJornadas, eliminarViaje, obtenerDetalleJornada } from '../db/database'; 
-import { generarPDF } from '../src/services/PdfGenerator';
 import { extraerCoordenadaLngLat, extraerFechaPuntoISO, normalizarRutaCoordenadas, parseRutaPuntos } from '../utils/routeUtils';
 
-// ─── Paleta completa y unificada ─────────────────────────────────────────────
 const COLORS = {
   bg:           '#010A14',
   cardBg:       '#081D33',
   headerBg:     '#051C33',
-  // Textos
   white:        '#FFFFFF',
-  text:         '#FFFFFF',        // ← añadido (usado en DetailRow)
+  text:         '#FFFFFF',
   textGold:     '#D4AF37',
   textWelcome:  '#9DA8B5',
-  subtext:      '#9DA8B5',        // ← añadido (alias de textWelcome)
-  // Acentos
-  primary:      '#D4AF37',        // ← añadido (usado en iconos de cards y ActivityIndicator)
+  subtext:      '#9DA8B5',
+  primary:      '#D4AF37',
   goldBevel:    '#D4AF37',
-  // Mapa
-  mapPath:      '#3b82f6',        // ← añadido (línea de ruta en el mapa)
-  // Utilitarios
+  mapPath:      '#3b82f6',
   danger:       '#ef4444',
   success:      '#10B981',
   border:       '#12365A',
@@ -50,11 +42,7 @@ export default function Historial() {
     try {
       const data = await obtenerJornadas();
       setJornadas(data.sort((a: any, b: any) => b.id - a.id));
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const abrirDetalle = async (item: any) => {
@@ -70,21 +58,14 @@ export default function Historial() {
           AsyncStorage.getItem('CURRENT_JORNADA_ID'),
           AsyncStorage.getItem('RUTA_OFFLINE_CACHE'),
         ]);
-        if (
-          jornadaActivaId &&
-          Number(jornadaActivaId) === Number(item.id) &&
-          rutaCache &&
-          normalizarRutaCoordenadas(rutaCache).length > 0
-        ) {
+        if (jornadaActivaId && Number(jornadaActivaId) === Number(item.id) && rutaCache && normalizarRutaCoordenadas(rutaCache).length > 0) {
           jornadaDetalle.ruta_geojson = rutaCache;
         }
       }
       setItemSeleccionado((actual: any) =>
         actual && Number(actual.id) === Number(item.id) ? jornadaDetalle : actual
       );
-    } catch (e) {
-      console.log('No se pudo cargar detalle completo del viaje', e);
-    }
+    } catch (e) { console.log('No se pudo cargar detalle completo del viaje', e); }
   };
 
   const confirmarEliminacion = () => {
@@ -93,122 +74,27 @@ export default function Historial() {
       "¿Estás seguro? Esta acción borrará el registro del celular permanentemente (no afecta la nube).",
       [
         { text: "Cancelar", style: "cancel" },
-        {
-          text: "ELIMINAR",
-          style: 'destructive',
-          onPress: async () => {
+        { text: "ELIMINAR", style: 'destructive', onPress: async () => {
             if (itemSeleccionado) {
               await eliminarViaje(itemSeleccionado.id);
               setModalVisible(false);
               cargarDatos();
               Alert.alert("Eliminado", "El viaje ha sido borrado del historial.");
             }
-          }
-        }
+        }}
       ]
     );
   };
 
+  // ✅ SIMPLIFICADO: eliminadas ~80 líneas de lógica manual para construir
+  //    pausas, incidencias, inspeccion y puntosRastreo.
+  //    PdfMaestro los carga desde SQLite con solo el jornadaId.
+  //    La validación PRO también ocurre dentro de PdfMaestro.
   const handleGenerarPDF = async () => {
     if (!itemSeleccionado) return;
-
-    try {
-      const customerInfo = await Purchases.getCustomerInfo();
-      const esPro = typeof customerInfo.entitlements.active['pro'] !== "undefined";
-      if (!esPro) {
-        Alert.alert(
-          "Función Premium ⭐",
-          "La generación de reportes PDF oficiales y códigos QR es exclusiva para usuarios PRO.\n\nEvita multas de la Guardia Nacional y profesionaliza tu trabajo.",
-          [
-            { text: "Más tarde", style: "cancel" },
-            { text: "VER PLANES", onPress: () => {
-              setModalVisible(false);
-              router.push('/PantallaSuscripcion');
-            }}
-          ]
-        );
-        return;
-      }
-    } catch (e) {
-      console.log("Error verificando estatus pro", e);
-    }
-
     setProcesandoPdf(true);
     try {
-      let pausas: any[] = [];
-      let incidencias: any[] = [];
-      let inspeccion: any = null;
-
-      try {
-        const detalle = await obtenerDetalleJornada(Number(itemSeleccionado.id));
-        pausas      = Array.isArray(detalle?.pausas)      ? detalle.pausas      : [];
-        incidencias = Array.isArray(detalle?.incidencias) ? detalle.incidencias : [];
-
-        const inspecciones = Array.isArray(detalle?.inspecciones) ? detalle.inspecciones : [];
-        if (inspecciones.length > 0) {
-          const ultimaInspeccion: any = [...inspecciones].sort(
-            (a: any, b: any) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime()
-          )[0];
-          let items = {};
-          try { items = JSON.parse(ultimaInspeccion.detalles_json || '{}'); } catch (e) {}
-          const fechaInspeccion = ultimaInspeccion.fecha ? new Date(ultimaInspeccion.fecha) : null;
-          inspeccion = {
-            fecha:       fechaInspeccion ? fechaInspeccion.toISOString().split('T')[0] : '---',
-            hora:        fechaInspeccion ? fechaInspeccion.toLocaleTimeString() : '---',
-            tipo:        ultimaInspeccion.tipo || 'general',
-            items,
-            comentarios: ultimaInspeccion.comentarios || '',
-            estatus:     (ultimaInspeccion.comentarios || '').trim().length > 5 ? 'CON OBSERVACIONES' : 'APROBADO'
-          };
-        }
-      } catch (e) {
-        console.log("Error leyendo detalle de jornada para PDF", e);
-      }
-
-      if (pausas.length === 0)      { try { pausas      = JSON.parse(itemSeleccionado.pausas_json      || '[]'); } catch(e){} }
-      if (incidencias.length === 0) { try { incidencias = JSON.parse(itemSeleccionado.incidencias_json || '[]'); } catch(e){} }
-
-      const fechaViaje = itemSeleccionado?.fecha_inicio
-        ? String(itemSeleccionado.fecha_inicio).split('T')[0]
-        : null;
-      if (!inspeccion && fechaViaje) {
-        try {
-          const raw = await AsyncStorage.getItem(`INSPECCION_${fechaViaje}`);
-          if (raw) inspeccion = JSON.parse(raw);
-        } catch (e) {}
-      }
-      if (!inspeccion) {
-        try {
-          const ultimaFecha = await AsyncStorage.getItem('ULTIMA_INSPECCION');
-          if (ultimaFecha) {
-            const raw = await AsyncStorage.getItem(`INSPECCION_${ultimaFecha}`);
-            if (raw) inspeccion = JSON.parse(raw);
-          }
-        } catch (e) {}
-      }
-      if (!inspeccion) {
-        try { inspeccion = JSON.parse(itemSeleccionado.inspeccion_json || 'null'); } catch(e){}
-      }
-
-      let puntosRastreo: any[] = [];
-      if (itemSeleccionado.ruta_geojson) {
-        const puntosRuta = parseRutaPuntos(itemSeleccionado.ruta_geojson);
-        if (Array.isArray(puntosRuta) && puntosRuta.length > 0) {
-          const paso = Math.max(1, Math.floor(puntosRuta.length / 10));
-          for (let i = 0; i < puntosRuta.length; i += paso) {
-            const coord = extraerCoordenadaLngLat(puntosRuta[i]);
-            if (!coord) continue;
-            puntosRastreo.push({
-              tipo:      'RASTREO',
-              hora:      extraerFechaPuntoISO(puntosRuta[i]),
-              ubicacion: `${coord[1].toFixed(4)}, ${coord[0].toFixed(4)}`,
-              detalle:   'Historial GPS'
-            });
-          }
-        }
-      }
-
-      await generarPDF(itemSeleccionado, pausas, incidencias, inspeccion, puntosRastreo);
+      await generarPdfMaestro({ jornadaId: Number(itemSeleccionado.id) });
     } catch (error) {
       Alert.alert("Error", "No se pudo generar el PDF.");
     } finally {
@@ -226,7 +112,6 @@ export default function Historial() {
         </View>
         <Text style={styles.cardDate}>{new Date(item.fecha_inicio).toLocaleDateString()}</Text>
       </View>
-
       <View style={styles.row}>
         <Text style={styles.label}>Origen:</Text>
         <Text style={styles.value} numberOfLines={1}>{item.origen}</Text>
@@ -235,9 +120,7 @@ export default function Historial() {
         <Text style={styles.label}>Destino:</Text>
         <Text style={styles.value} numberOfLines={1}>{item.destino}</Text>
       </View>
-
       <View style={styles.divider} />
-
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={[styles.status, { color: item.fecha_fin ? COLORS.success : COLORS.primary }]}>
           {item.fecha_fin ? "FINALIZADO" : "PENDIENTE"}
@@ -249,86 +132,42 @@ export default function Historial() {
 
   // ─── Mapa ───────────────────────────────────────────────────────────────
   const MapaHistorial = ({ rutaJson }: { rutaJson: unknown }) => {
-    if (!rutaJson) return (
-      <View style={styles.mapError}>
-        <Text style={{ color: COLORS.subtext }}>Sin datos de ruta</Text>
-      </View>
-    );
+    if (!rutaJson) return <View style={styles.mapError}><Text style={{ color: COLORS.subtext }}>Sin datos de ruta</Text></View>;
 
     const coordenadas = normalizarRutaCoordenadas(rutaJson);
-    if (coordenadas.length === 0) return (
-      <View style={styles.mapError}>
-        <Text style={{ color: COLORS.subtext }}>Ruta vacía o inválida</Text>
-      </View>
-    );
+    if (coordenadas.length === 0) return <View style={styles.mapError}><Text style={{ color: COLORS.subtext }}>Ruta vacía o inválida</Text></View>;
 
     const puntoInicial = coordenadas[0];
     const puntoFinal   = coordenadas[coordenadas.length - 1];
     const latitudes    = coordenadas.map((c) => c[1]);
     const longitudes   = coordenadas.map((c) => c[0]);
-    const minLat = Math.min(...latitudes);
-    const maxLat = Math.max(...latitudes);
-    const minLng = Math.min(...longitudes);
-    const maxLng = Math.max(...longitudes);
+    const minLat = Math.min(...latitudes), maxLat = Math.max(...latitudes);
+    const minLng = Math.min(...longitudes), maxLng = Math.max(...longitudes);
     const puedeAjustarBounds = coordenadas.length > 1 && (minLat !== maxLat || minLng !== maxLng);
 
     return (
       <View style={styles.mapContainer}>
-        <Mapbox.MapView
-          style={styles.map}
-          styleURL={Mapbox.StyleURL.Dark}
-          logoEnabled={false}
-          attributionEnabled={false}
-          scaleBarEnabled={false}
-        >
+        <Mapbox.MapView style={styles.map} styleURL={Mapbox.StyleURL.Dark} logoEnabled={false} attributionEnabled={false} scaleBarEnabled={false}>
           {puedeAjustarBounds ? (
-            <Mapbox.Camera
-              bounds={{ ne: [maxLng, maxLat], sw: [minLng, minLat],
-                paddingTop: 40, paddingBottom: 40, paddingLeft: 40, paddingRight: 40 }}
-              animationDuration={1000}
-            />
+            <Mapbox.Camera bounds={{ ne: [maxLng, maxLat], sw: [minLng, minLat], paddingTop: 40, paddingBottom: 40, paddingLeft: 40, paddingRight: 40 }} animationDuration={1000} />
           ) : (
             <Mapbox.Camera centerCoordinate={puntoInicial} zoomLevel={14} animationDuration={1000} />
           )}
-
           {coordenadas.length > 1 && (
-            <Mapbox.ShapeSource
-              id={`routeSourceHistorial-${coordenadas.length}`}
-              shape={{ type: 'Feature', geometry: { type: 'LineString', coordinates: coordenadas }, properties: {} }}
-            >
-              <Mapbox.LineLayer
-                id={`routeLayerHistorial-${coordenadas.length}`}
-                style={{ lineColor: COLORS.mapPath, lineWidth: 4, lineCap: 'round', lineJoin: 'round' }}
-              />
+            <Mapbox.ShapeSource id={`routeSourceHistorial-${coordenadas.length}`} shape={{ type: 'Feature', geometry: { type: 'LineString', coordinates: coordenadas }, properties: {} }}>
+              <Mapbox.LineLayer id={`routeLayerHistorial-${coordenadas.length}`} style={{ lineColor: COLORS.mapPath, lineWidth: 4, lineCap: 'round', lineJoin: 'round' }} />
             </Mapbox.ShapeSource>
           )}
-
-          <Mapbox.ShapeSource
-            id={`startSourceHistorial-${coordenadas.length}`}
-            shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: puntoInicial }, properties: {} }}
-          >
-            <Mapbox.CircleLayer
-              id={`startLayerHistorial-${coordenadas.length}`}
-              style={{ circleRadius: 6, circleColor: '#22c55e', circleStrokeWidth: 2, circleStrokeColor: '#fff' }}
-            />
+          <Mapbox.ShapeSource id={`startSourceHistorial-${coordenadas.length}`} shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: puntoInicial }, properties: {} }}>
+            <Mapbox.CircleLayer id={`startLayerHistorial-${coordenadas.length}`} style={{ circleRadius: 6, circleColor: '#22c55e', circleStrokeWidth: 2, circleStrokeColor: '#fff' }} />
           </Mapbox.ShapeSource>
-
           {coordenadas.length > 1 && (
-            <Mapbox.ShapeSource
-              id={`endSourceHistorial-${coordenadas.length}`}
-              shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: puntoFinal }, properties: {} }}
-            >
-              <Mapbox.CircleLayer
-                id={`endLayerHistorial-${coordenadas.length}`}
-                style={{ circleRadius: 6, circleColor: '#ef4444', circleStrokeWidth: 2, circleStrokeColor: '#fff' }}
-              />
+            <Mapbox.ShapeSource id={`endSourceHistorial-${coordenadas.length}`} shape={{ type: 'Feature', geometry: { type: 'Point', coordinates: puntoFinal }, properties: {} }}>
+              <Mapbox.CircleLayer id={`endLayerHistorial-${coordenadas.length}`} style={{ circleRadius: 6, circleColor: '#ef4444', circleStrokeWidth: 2, circleStrokeColor: '#fff' }} />
             </Mapbox.ShapeSource>
           )}
         </Mapbox.MapView>
-
-        <View style={styles.mapOverlay}>
-          <Text style={styles.mapOverlayText}>Ruta Grabada</Text>
-        </View>
+        <View style={styles.mapOverlay}><Text style={styles.mapOverlayText}>Ruta Grabada</Text></View>
       </View>
     );
   };
@@ -352,11 +191,7 @@ export default function Historial() {
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderCard}
           contentContainerStyle={{ padding: 20 }}
-          ListEmptyComponent={
-            <Text style={{ color: COLORS.subtext, textAlign: 'center', marginTop: 50 }}>
-              No hay viajes registrados aún.
-            </Text>
-          }
+          ListEmptyComponent={<Text style={{ color: COLORS.subtext, textAlign: 'center', marginTop: 50 }}>No hay viajes registrados aún.</Text>}
         />
       )}
 
@@ -392,18 +227,11 @@ export default function Historial() {
 
             <View style={{ gap: 15, marginTop: 30, marginBottom: 50 }}>
               <TouchableOpacity style={styles.btnAction} onPress={handleGenerarPDF} disabled={procesandoPdf}>
-                {procesandoPdf
-                  ? <ActivityIndicator color="#000" />
-                  : <MaterialCommunityIcons name="file-pdf-box" size={24} color="#000" />}
-                <Text style={styles.btnText}>
-                  {procesandoPdf ? "PROCESANDO..." : "GENERAR PDF / QR"}
-                </Text>
+                {procesandoPdf ? <ActivityIndicator color="#000" /> : <MaterialCommunityIcons name="file-pdf-box" size={24} color="#000" />}
+                <Text style={styles.btnText}>{procesandoPdf ? "PROCESANDO..." : "GENERAR PDF / QR"}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.btnAction, { backgroundColor: 'rgba(239,68,68,0.15)', borderWidth: 1, borderColor: COLORS.danger }]}
-                onPress={confirmarEliminacion}
-              >
+              <TouchableOpacity style={[styles.btnAction, { backgroundColor: 'rgba(239,68,68,0.15)', borderWidth: 1, borderColor: COLORS.danger }]} onPress={confirmarEliminacion}>
                 <MaterialCommunityIcons name="trash-can" size={24} color={COLORS.danger} />
                 <Text style={[styles.btnText, { color: COLORS.danger }]}>ELIMINAR REGISTRO</Text>
               </TouchableOpacity>
@@ -415,7 +243,6 @@ export default function Historial() {
   );
 }
 
-// ─── Componente fila de detalle ─────────────────────────────────────────────
 const DetailRow = ({ label, value }: any) => (
   <View style={{ flexDirection: 'row', marginBottom: 8 }}>
     <Text style={{ color: COLORS.subtext, width: 80, fontSize: 12 }}>{label}:</Text>
@@ -423,68 +250,29 @@ const DetailRow = ({ label, value }: any) => (
   </View>
 );
 
-// ─── Estilos ────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    paddingTop: 50, paddingBottom: 15, paddingHorizontal: 20,
-    backgroundColor: COLORS.headerBg,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
+  header: { paddingTop: 50, paddingBottom: 15, paddingHorizontal: 20, backgroundColor: COLORS.headerBg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: COLORS.border },
   headerTitle:  { color: COLORS.textGold, fontSize: 18, fontWeight: 'bold' },
-
-  card: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 12, padding: 15, marginBottom: 15,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
+  card: { backgroundColor: COLORS.cardBg, borderRadius: 12, padding: 15, marginBottom: 15, borderWidth: 1, borderColor: COLORS.border },
   cardHeader:   { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   cardId:       { color: COLORS.goldBevel, fontWeight: 'bold' },
   cardDate:     { color: COLORS.textWelcome, fontSize: 12 },
-
   row:          { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   label:        { color: COLORS.textWelcome, width: 60, fontSize: 12 },
   value:        { color: COLORS.white, fontWeight: '500', flex: 1 },
-
   divider:      { height: 1, backgroundColor: COLORS.border, marginVertical: 10 },
   status:       { fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
-
   modalBg:      { flex: 1, backgroundColor: COLORS.bg },
-  modalHeader: {
-    padding: 20, paddingTop: 30,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: COLORS.headerBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
+  modalHeader: { padding: 20, paddingTop: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.headerBg, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   modalTitle:   { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
   sectionTitle: { color: COLORS.textGold, marginVertical: 15, fontWeight: 'bold', fontSize: 16 },
-
-  detailBox: {
-    backgroundColor: COLORS.cardBg,
-    padding: 15, borderRadius: 10,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-
+  detailBox: { backgroundColor: COLORS.cardBg, padding: 15, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border },
   mapContainer: { height: 250, borderRadius: 12, overflow: 'hidden', backgroundColor: COLORS.cardBg },
   map:          { width: '100%', height: '100%' },
-  mapOverlay: {
-    position: 'absolute', top: 10, right: 10,
-    backgroundColor: 'rgba(8,29,51,0.85)',
-    paddingHorizontal: 8, paddingVertical: 4,
-    borderRadius: 5, borderWidth: 1, borderColor: COLORS.border,
-  },
+  mapOverlay: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(8,29,51,0.85)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5, borderWidth: 1, borderColor: COLORS.border },
   mapOverlayText: { color: COLORS.goldBevel, fontSize: 12, fontWeight: 'bold' },
-  mapError: {
-    height: 250, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: COLORS.cardBg, borderRadius: 12,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-
-  btnAction: {
-    backgroundColor: COLORS.goldBevel,
-    padding: 15, borderRadius: 10,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10,
-  },
+  mapError: { height: 250, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.cardBg, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border },
+  btnAction: { backgroundColor: COLORS.goldBevel, padding: 15, borderRadius: 10, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
   btnText: { color: COLORS.bg, fontWeight: 'bold', fontSize: 14 },
 });

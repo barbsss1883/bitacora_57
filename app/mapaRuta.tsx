@@ -4,7 +4,10 @@ import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import * as turf from '@turf/turf';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// ✅ AGREGADO: Supabase para persistir puntos GPS y eventos en la nube
+import { supabase } from '../src/services/supabaseClient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { insertarPuntoGPS, calcularDistanciaTotalKm } from '../db/database';
 
 Mapbox.setAccessToken("pk.eyJ1IjoibHVpc2cwNDE4IiwiYSI6ImNtbWY2YzhsNTA1YWMycm9rZXhnY3N3ZW8ifQ.4r9JJKMYgs3_BQB-HDZfkA");
 
@@ -27,14 +30,54 @@ const MapaRuta = () => {
     (async () => {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') setPermiso(true);
-        
+
+        // ✅ FIX: Al reabrir la app, cargar puntos desde SQLite en lugar del cache.
+        // La tarea background siguió insertando en puntos_gps mientras la app estuvo
+        // cerrada. El cache de AsyncStorage solo tiene puntos hasta que se cerró la app,
+        // por eso al reconectar se formaba una línea recta con el hueco.
+        try {
+            const jornadaIdStr = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
+            if (jornadaIdStr) {
+                const { getDB } = await import('../db/database');
+                const db = await getDB();
+                const puntos: any[] = await db.getAllAsync(
+                    'SELECT latitud, longitud FROM puntos_gps WHERE jornada_id = ? ORDER BY id ASC',
+                    [parseInt(jornadaIdStr, 10)]
+                );
+                if (puntos && puntos.length >= 2) {
+                    // Convertir al formato [lng, lat] que usa Mapbox
+                    const coords = puntos.map(p => [p.longitud, p.latitud]);
+                    coordenadasRef.current = coords;
+                    actualizarMapaVisual(coords);
+
+                    // Sincronizar el cache con los datos reales de SQLite
+                    const geojsonCache = JSON.stringify({
+                        type: 'Feature',
+                        geometry: { type: 'LineString', coordinates: coords },
+                        properties: {}
+                    });
+                    await AsyncStorage.setItem('RUTA_OFFLINE_CACHE', geojsonCache);
+                    return; // SQLite tiene datos completos, no necesitamos el cache viejo
+                }
+            }
+        } catch (e) {
+            console.warn('[MapaRuta] Error cargando puntos desde SQLite:', e);
+        }
+
+        // Fallback: si no hay jornada activa o SQLite está vacío, usar el cache
         const rutaGuardada = await AsyncStorage.getItem('RUTA_OFFLINE_CACHE');
         if (rutaGuardada) {
-            const coords = JSON.parse(rutaGuardada);
-            if (coords.length > 0) {
-                coordenadasRef.current = coords;
-                actualizarMapaVisual(coords);
-            }
+            try {
+                const parsed = JSON.parse(rutaGuardada);
+                // Soporte para ambos formatos: GeoJSON Feature o array simple
+                const coords = parsed?.type === 'Feature'
+                    ? parsed.geometry.coordinates
+                    : Array.isArray(parsed) ? parsed : [];
+                if (coords.length > 0) {
+                    coordenadasRef.current = coords;
+                    actualizarMapaVisual(coords);
+                }
+            } catch (_) {}
         }
     })();
   }, []);
@@ -63,7 +106,7 @@ const MapaRuta = () => {
 
   const alMoverse = async (location: Mapbox.Location) => {
     if (!location?.coords) return;
-    const { longitude, latitude, speed, accuracy } = location.coords;
+    const { longitude, latitude, speed, accuracy, altitude } = location.coords;
 
     const vel = speed && speed > 0 ? Math.round(speed * 3.6) : 0;
     setVelocidad(vel);
@@ -88,10 +131,51 @@ const MapaRuta = () => {
     }
 
     if (debeGuardar) {
-        coordenadasRef.current = [...coordenadasRef.current, nuevoPunto];
-        actualizarMapaVisual(coordenadasRef.current);
-        
-        AsyncStorage.setItem('RUTA_OFFLINE_CACHE', JSON.stringify(coordenadasRef.current));
+        const nuevasCoords = [...coordenadasRef.current, nuevoPunto];
+        coordenadasRef.current = nuevasCoords;
+        actualizarMapaVisual(nuevasCoords);
+
+        // ✅ FIX 1: Guardar en SQLite para que el contador de KM funcione en tiempo real
+        // y para que finalizarJornada tenga puntos reales aunque la app se haya cerrado.
+        try {
+            const jornadaIdStr = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
+            if (jornadaIdStr) {
+                await insertarPuntoGPS(
+                    parseInt(jornadaIdStr, 10),
+                    latitude,
+                    longitude,
+                    speed || 0
+                );
+            }
+        } catch (e) {
+            console.warn('[MapaRuta] Error insertando punto GPS en SQLite:', e);
+        }
+
+        // ✅ AGREGADO: Enviar punto GPS a Supabase de forma silenciosa (no bloquea UI)
+        AsyncStorage.getItem('CURRENT_JORNADA_ID').then(async (jornadaIdStr) => {
+            if (!jornadaIdStr) return;
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) return;
+                // Encolar en puntos_gps — falla silenciosamente si no hay conexión
+                await supabase.from('puntos_gps_temp').insert({
+                    viaje_id_local: parseInt(jornadaIdStr, 10),
+                    lat:            latitude,
+                    lng:            longitude,
+                    velocidad_kmh:  vel,
+                    timestamp:      new Date().toISOString(),
+                });
+            } catch (_) { /* offline: SQLite como fuente de verdad */ }
+        }).catch(() => {});
+
+        // ✅ FIX 2: Guardar en RUTA_OFFLINE_CACHE con formato GeoJSON Feature
+        // (antes se guardaba como array simple [[lng,lat]] que finalizarJornada no reconocía)
+        const geojsonCache = JSON.stringify({
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: nuevasCoords },
+            properties: { timestamps: [Date.now()] }
+        });
+        AsyncStorage.setItem('RUTA_OFFLINE_CACHE', geojsonCache);
     }
   };
 
@@ -118,8 +202,29 @@ const MapaRuta = () => {
         `Recorriste un total de ${kilometrosTotales.toFixed(2)} km.\n\nDatos listos para enviar a la base de datos.`
     );
 
-    // TODO: Aquí integrarás tu función para guardar en la BD de zonas prohibidas/rutas seguras
-    console.log("Datos de la ruta listos:", datosFinales);
+    // ✅ CAMBIADO: enviar ruta finalizada a Supabase (rutas_recolectadas)
+    try {
+        const jornadaIdStr = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
+        const modalidad = 'Sencillo'; // Se puede leer de FORM_PRESETS si se necesita
+        const featureGeoJSON = {
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: coords },
+            properties: {
+                id_interno:  jornadaIdStr ? parseInt(jornadaIdStr, 10) : null,
+                km_totales:  parseFloat(kilometrosTotales.toFixed(2)),
+                fecha:       new Date().toISOString(),
+            }
+        };
+        const { data: { session } } = await supabase.auth.getSession();
+        await supabase.from('rutas_recolectadas').insert([{
+            usuario_id:  session?.user?.id ?? null,
+            tipo_unidad: modalidad,
+            datos_viaje: featureGeoJSON,
+            procesado:   false,
+        }]);
+    } catch (e) {
+        console.warn('[MapaRuta] No se pudo enviar ruta a Supabase (se guardó local):', e);
+    }
   };
 
   const centrarManual = () => { 

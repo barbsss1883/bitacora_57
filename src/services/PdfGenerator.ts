@@ -9,7 +9,8 @@ export const generarPDF = async (
   pausas: any[], 
   incidencias: any[], 
   inspeccion: any,      
-  puntosRastreo: any[]  
+  puntosRastreo: any[],
+  rutaGeojson?: string | null
 ) => {
   if (!jornada) return;
 
@@ -66,15 +67,6 @@ export const generarPDF = async (
       <td>${new Date(i.fecha).toLocaleTimeString()}</td>
       <td>${i.descripcion}</td>
       <td style="font-size: 8px;">${i.direccion || 'Ubicación GPS registrada'}</td>
-    </tr>
-  `).join('');
-
-  const filasRastreo = listaPuntos.map((pt: any) => `
-    <tr>
-      <td style="font-weight:bold; font-size:9px;">${new Date(pt.hora).toLocaleTimeString()}</td>
-      <td style="font-size:9px;">${pt.tipo}</td>
-      <td style="font-family:monospace; font-size:8px;">${pt.ubicacion}</td>
-      <td style="font-size:8px; color:#555;">${pt.detalle}</td>
     </tr>
   `).join('');
 
@@ -205,20 +197,9 @@ export const generarPDF = async (
           </table>
         ` : ''}
 
-        ${listaPuntos.length > 0 ? `
-          <h2>IV. Trazabilidad Satelital (Puntos de Control)</h2>
-          <table>
-            <thead>
-              <tr>
-                <th width="15%">Hora</th>
-                <th width="15%">Evento</th>
-                <th width="25%">Coordenadas</th>
-                <th width="45%">Detalle</th>
-              </tr>
-            </thead>
-            <tbody>${filasRastreo}</tbody>
-          </table>
-        ` : '<p style="font-size:9px; color:#999; margin:10px 0;">* Sin datos GPS disponibles para trazabilidad.</p>'}
+
+
+
 
         <div class="legal-footer">
           <div class="signature-box">

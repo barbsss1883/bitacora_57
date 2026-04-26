@@ -16,7 +16,6 @@ El sistema permite el registro de tiempos de conducción, pausas y descansos, fu
 
 ### 📱 Aplicación Móvil (Operador)
 * **Rastreo GPS en Segundo Plano:** Registro continuo de ubicación y velocidad sin afectar la batería.
-* **Geocodificación Inversa:** Conversión automática de coordenadas a direcciones reales (ej. *"Carr. 57 Km 100, Querétaro"*) para pausas e incidencias.
 * **Modo Offline Robusto:** Base de datos local (SQLite) que almacena viajes completos y sincroniza con Firebase al detectar red.
 * **Certificación Digital:**
     * Generación de PDFs certificados en el dispositivo.

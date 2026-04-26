@@ -1,7 +1,7 @@
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../src/services/supabaseClient';
 
 export default function Index() {
   const [isLoading, setIsLoading] = useState(true);
@@ -9,18 +9,23 @@ export default function Index() {
 
   useEffect(() => {
     checkSession();
+
+    // Escucha cambios de sesión en tiempo real (logout desde otra pantalla, token expirado, etc.)
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setRutaDestino(session ? '/home' : '/login');
+      setIsLoading(false);
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   const checkSession = async () => {
     try {
-      const user = await AsyncStorage.getItem('USER_SESSION');
-      if (user) {
-        setRutaDestino('/home');
-      } else {
-        setRutaDestino('/login');
-      }
+      const { data: { session } } = await supabase.auth.getSession();
+      setRutaDestino(session ? '/home' : '/login');
     } catch (e) {
-      console.error("Error leyendo sesión:", e);
+      console.error('Error leyendo sesión:', e);
+      setRutaDestino('/login');
     } finally {
       setIsLoading(false);
     }
@@ -33,5 +38,6 @@ export default function Index() {
       </View>
     );
   }
+
   return <Redirect href={rutaDestino} />;
 }

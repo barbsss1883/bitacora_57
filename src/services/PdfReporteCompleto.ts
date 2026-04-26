@@ -205,42 +205,9 @@ const buildSeccionELD = (eld: DatosELD, operador: string): string => {
     FS: 'Fuera de Servicio', DESC: 'Descanso', COND: 'Conduciendo', SERV: 'En Servicio',
   };
 
-  // ── Mini gráfica SVG (texto, no imagen — funciona en expo-print) ──────────
-  const W = 520; // ancho SVG en puntos
-  const H = 80;
-  const ROW = H / 4;
-  const FILAS = ['FS', 'DESC', 'COND', 'SERV'];
-  const xMin = (min: number) => (min / 1440) * W;
-
   const segsEfectivos: SegmentoELD[] = eld.sinActividad
     ? [{ estado: 'FS', inicioMin: 0, finMin: 1440 }]
     : eld.segmentos;
-
-  const rectsFondos = FILAS.map(
-    (f, i) =>
-      `<rect x="0" y="${i * ROW}" width="${W}" height="${ROW}"
-             fill="${i % 2 === 0 ? '#f1f5f9' : '#e2e8f0'}" />`
-  ).join('');
-
-  const lineasHora = [0, 6, 12, 18, 24]
-    .map((h) => {
-      const x = xMin(h * 60);
-      return `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#94a3b8" stroke-width="0.5"/>
-              <text x="${x + 2}" y="-3" font-size="7" fill="#64748b">${h}h</text>`;
-    })
-    .join('');
-
-  const barras = segsEfectivos
-    .map((s) => {
-      const filaIdx = FILAS.indexOf(s.estado);
-      if (filaIdx < 0) return '';
-      const y = filaIdx * ROW;
-      const x = xMin(s.inicioMin);
-      const w = Math.max(xMin(s.finMin) - x, 1);
-      return `<rect x="${x}" y="${y + ROW * 0.2}" width="${w}" height="${ROW * 0.6}"
-                    fill="${eld.sinActividad ? '#cbd5e1' : COLORES[s.estado]}" rx="1"/>`;
-    })
-    .join('');
 
   // ── Tabla de totales ──────────────────────────────────────────────────────
   const celdaTotales = Object.entries(eld.totales)
@@ -300,44 +267,6 @@ const buildSeccionELD = (eld: DatosELD, operador: string): string => {
                     text-align:center; color:#94a3b8; font-size:11px; font-style:italic;">
           Sin actividad de conducción registrada para este día.
         </div>` : ''}
-
-      <!-- Gráfica SVG -->
-      <div style="border:1px solid #e2e8f0; border-top:none; padding:14px; background:#fff;">
-        <div style="font-size:10px; color:#64748b; margin-bottom:6px; font-weight:bold;
-                    letter-spacing:0.5px;">
-          GRÁFICA DIARIA DE ACTIVIDAD
-        </div>
-
-        <!-- Leyenda -->
-        <div style="display:flex; gap:16px; margin-bottom:8px; flex-wrap:wrap;">
-          ${Object.entries(COLORES).map(([k, c]) => `
-            <span style="font-size:9px; color:#475569;">
-              <span style="display:inline-block; width:10px; height:10px;
-                           background:${c}; border-radius:2px; vertical-align:middle;
-                           margin-right:3px;"></span>
-              ${ETIQUETAS[k]}
-            </span>`).join('')}
-        </div>
-
-        <!-- Etiquetas Y -->
-        <div style="display:flex; align-items:flex-start;">
-          <div style="width:30px; margin-right:4px; margin-top:8px;">
-            ${FILAS.map((f) => `
-              <div style="height:${ROW}px; display:flex; align-items:center;
-                          justify-content:flex-end; padding-right:4px;">
-                <span style="font-size:8px; font-weight:bold; color:#64748b;">${f}</span>
-              </div>`).join('')}
-          </div>
-          <svg xmlns="http://www.w3.org/2000/svg"
-               width="${W}" height="${H + 12}"
-               viewBox="0 -12 ${W} ${H + 12}"
-               style="overflow:visible; display:block;">
-            <g>${rectsFondos}</g>
-            <g>${lineasHora}</g>
-            <g>${barras}</g>
-          </svg>
-        </div>
-      </div>
 
       <!-- Totales -->
       <table style="width:100%; border-collapse:collapse; border:1px solid #e2e8f0;
@@ -430,7 +359,7 @@ export const generarReporteCompleto = async (
     return null;
   }
 
-  // ── 3. Obtener datos ELD del día ──────────────────────────────────────────
+  // ── 3. Obtener datos ELD del día ─────────────────────────────────────────
   const eld = await obtenerELDDelDia();
 
   // ── 4. Construir HTML ─────────────────────────────────────────────────────
@@ -494,6 +423,7 @@ export const generarReporteCompleto = async (
 
         ${seccionInspeccion}
         ${seccionELD}
+
 
         <!-- ══ PIE DE PÁGINA ══ -->
         <div style="margin-top:30px; padding-top:16px; border-top:1px dashed #cbd5e1;

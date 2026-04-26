@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, Activity
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { getDB } from '../db/database';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
+// ✅ CAMBIADO: expo-print + expo-sharing + HTML manual → PdfMaestro
+// Se eliminaron: import * as Print, import * as Sharing
+import { generarPdfMaestro } from '../src/services/PdfMaestro';
 
 export default function HistorialInspecciones() {
   const router = useRouter();
@@ -18,11 +19,13 @@ export default function HistorialInspecciones() {
       const db = await getDB();
       const registros = await db.getAllAsync(`
         SELECT i.id, i.tipo, i.comentarios, i.fecha, i.detalles_json,
+               i.jornada_id,
                j.unidad, j.operador, j.placas
         FROM inspecciones i
         LEFT JOIN jornadas j ON i.jornada_id = j.id
         ORDER BY i.id DESC LIMIT 50
       `);
+      // ✅ Se añade jornada_id al SELECT para poder llamar PdfMaestro con él
       setInspecciones(registros || []);
     } catch (error) {
       console.log('Error al cargar historial:', error);
@@ -31,78 +34,24 @@ export default function HistorialInspecciones() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      cargarHistorial();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => { cargarHistorial(); }, []));
 
+  // ✅ CAMBIADO: eliminado el bloque de ~70 líneas de HTML manual.
+  //    Si la inspección tiene jornada vinculada → PdfMaestro (PDF completo).
+  //    Si es una inspección libre (sin jornada) → aviso al usuario.
   const generarPDF = async (item: any) => {
+    if (!item.jornada_id) {
+      Alert.alert(
+        "Sin jornada vinculada",
+        "Esta inspección no está vinculada a ninguna jornada. El PDF completo solo puede generarse desde el historial de viajes."
+      );
+      return;
+    }
+
     setGenerandoPDF(true);
-    let detalles: Record<string, boolean> = {};
     try {
-      detalles = JSON.parse(item.detalles_json || '{}');
-    } catch (e) { console.log(e); }
-
-    const filasDetalles = Object.entries(detalles).map(([pieza, estado]) => `
-      <tr>
-        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-size: 14px;">${pieza}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold; font-size: 14px; color: ${estado ? '#059669' : '#dc2626'};">
-          ${estado ? 'PASÓ (✓)' : 'FALLA (X)'}
-        </td>
-      </tr>
-    `).join('');
-
-    const html = `
-      <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-        </head>
-        <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #010A14;">
-          <div style="border-bottom: 3px solid #D4AF37; padding-bottom: 15px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: flex-end;">
-              <h1 style="color: #051C33; margin: 0; font-size: 28px;">BITÁCORA <span style="color: #D4AF37;">57</span></h1>
-              <p style="margin: 0; font-weight: bold; color: #64748b; font-size: 12px; letter-spacing: 1px;">REPORTE OFICIAL DE INSPECCIÓN VISUAL</p>
-          </div>
-          
-          <div style="background-color: #f1f5f9; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
-              <p style="margin: 5px 0;"><strong>Operador:</strong> ${item.operador || 'No registrado'}</p>
-              <p style="margin: 5px 0;"><strong>Unidad/Eco:</strong> ${item.unidad || 'N/A'} <span style="color:#64748b;">(Placas: ${item.placas || '--'})</span></p>
-              <p style="margin: 5px 0;"><strong>Fecha y Hora:</strong> ${new Date(item.fecha).toLocaleString('es-MX')}</p>
-              <p style="margin: 5px 0;"><strong>Tipo de Revisión:</strong> ${item.tipo || 'Inspección General'}</p>
-          </div>
-
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-            <thead>
-              <tr style="background-color: #051C33; color: #ffffff;">
-                <th style="padding: 12px; text-align: left; border-top-left-radius: 6px;">Elemento Revisado</th>
-                <th style="padding: 12px; text-align: right; border-top-right-radius: 6px;">Estado Físico</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filasDetalles || '<tr><td colspan="2" style="text-align:center; padding: 20px; color: #94a3b8;">Sin detalles registrados</td></tr>'}
-            </tbody>
-          </table>
-
-          ${item.comentarios ? `
-            <div style="padding: 15px; border-left: 4px solid #D4AF37; background-color: #fffbeb; border-radius: 4px;">
-              <p style="margin: 0; color: #b45309; font-weight: bold; font-size: 14px;">Observaciones del Operador:</p>
-              <p style="margin-top: 8px; margin-bottom: 0; font-style: italic; color: #334155;">"${item.comentarios}"</p>
-            </div>
-          ` : ''}
-
-          <div style="margin-top: 50px; padding-top: 20px; border-top: 1px dashed #cbd5e1; text-align: center; color: #94a3b8; font-size: 11px;">
-            <p style="margin: 2px;">Este documento es un registro digital generado automáticamente por la aplicación Bitácora 57.</p>
-            <p style="margin: 2px;">Válido para controles internos de flota y evidencia de mantenimiento preventivo.</p>
-          </div>
-        </body>
-      </html>
-    `;
-
-    try {
-      const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf', dialogTitle: 'Compartir Reporte de Inspección' });
+      await generarPdfMaestro({ jornadaId: item.jornada_id, inspeccionId: item.id });
     } catch (error) {
-      console.error("Error PDF:", error);
       Alert.alert("Error", "No se pudo generar el documento PDF.");
     } finally {
       setGenerandoPDF(false);
@@ -135,13 +84,9 @@ export default function HistorialInspecciones() {
               </Text>
             </View>
             
-            {/* Botón rápido para generar PDF desde la lista */}
             <TouchableOpacity 
               style={styles.pdfButton} 
-              onPress={(e) => {
-                e.stopPropagation(); // Evita que se abra el modal al picar el botón de PDF
-                generarPDF(item);
-              }}
+              onPress={(e) => { e.stopPropagation(); generarPDF(item); }}
               disabled={generandoPDF}
             >
               <MaterialCommunityIcons name="file-pdf-box" size={26} color="#ef4444" />
@@ -163,24 +108,15 @@ export default function HistorialInspecciones() {
   const renderDetallesModal = () => {
     if (!inspeccionSeleccionada) return null;
     let detalles: Record<string, boolean> = {};
-    try {
-      detalles = JSON.parse(inspeccionSeleccionada.detalles_json || '{}');
-    } catch (e) { console.log(e); }
+    try { detalles = JSON.parse(inspeccionSeleccionada.detalles_json || '{}'); } catch (e) { console.log(e); }
 
     const items = Object.entries(detalles);
-
-    if (items.length === 0) {
-      return <Text style={{color: '#9DA8B5', textAlign: 'center'}}>No hay detalles registrados.</Text>;
-    }
+    if (items.length === 0) return <Text style={{color: '#9DA8B5', textAlign: 'center'}}>No hay detalles registrados.</Text>;
 
     return items.map(([key, valorStatus], index) => (
       <View key={index} style={styles.detalleRow}>
         <Text style={styles.detalleKey}>{key}</Text>
-        <MaterialCommunityIcons 
-          name={valorStatus ? "check-circle" : "close-circle"} 
-          size={24} 
-          color={valorStatus ? "#10b981" : "#ef4444"} 
-        />
+        <MaterialCommunityIcons name={valorStatus ? "check-circle" : "close-circle"} size={24} color={valorStatus ? "#10b981" : "#ef4444"} />
       </View>
     ));
   };
@@ -211,20 +147,16 @@ export default function HistorialInspecciones() {
         />
       )}
 
-      {/* MODAL DE DETALLES */}
-      <Modal
-        visible={!!inspeccionSeleccionada}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setInspeccionSeleccionada(null)}
-      >
+      <Modal visible={!!inspeccionSeleccionada} animationType="fade" transparent onRequestClose={() => setInspeccionSeleccionada(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Reporte de Inspección</Text>
               <View style={{flexDirection: 'row', alignItems: 'center', gap: 15}}>
                 <TouchableOpacity onPress={() => generarPDF(inspeccionSeleccionada)} disabled={generandoPDF}>
-                  <MaterialCommunityIcons name="export-variant" size={24} color="#D4AF37" />
+                  {generandoPDF
+                    ? <ActivityIndicator size="small" color="#D4AF37" />
+                    : <MaterialCommunityIcons name="export-variant" size={24} color="#D4AF37" />}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setInspeccionSeleccionada(null)}>
                   <MaterialCommunityIcons name="close" size={28} color="#9DA8B5" />
@@ -234,7 +166,6 @@ export default function HistorialInspecciones() {
             
             <ScrollView style={{maxHeight: 400}}>
               {renderDetallesModal()}
-              
               {inspeccionSeleccionada?.comentarios ? (
                 <View style={styles.comentariosBox}>
                   <Text style={styles.comentariosBoxTitle}>Observaciones:</Text>

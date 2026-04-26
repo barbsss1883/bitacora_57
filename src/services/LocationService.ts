@@ -3,6 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { insertarPuntoGPS, validarTiemposSCT } from '../../db/database';
+// SyncService import removed — sync happens in foreground only
 
 const LOCATION_TASK_NAME = 'BACKGROUND_GPS_TRACKING';
 type ResultadoRastreo = { ok: boolean; message?: string };
@@ -30,7 +31,9 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
             location.coords.longitude,
             location.coords.speed || 0 
           );
-          
+          // ✅ procesarColaSync() eliminado: Firestore puede no estar inicializado
+          // en el contexto background y causaría que la tarea GPS se detuviera.
+          // La sync ocurre en foreground desde jornadaEnCurso.tsx useEffect.
           console.log(`📍 Guardado: ID ${jornadaId} - [${location.coords.latitude}, ${location.coords.longitude}]`);
         } else {
           console.log("⚠️ GPS activo pero sin jornada seleccionada.");
@@ -88,14 +91,26 @@ export const iniciarRastreoBackground = async (): Promise<ResultadoRastreo> => {
 
   try {
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-      accuracy: Location.Accuracy.Balanced,
-      distanceInterval: 500, 
-      timeInterval: 10000,   
-      deferredUpdatesInterval: 5000,
+      accuracy: Location.Accuracy.High,
+      // ✅ FIX: 500m producía muy pocos puntos → línea recta al cerrar la app.
+      // 80m captura curvas y cruces sin saturar la DB (~450 puntos en 36km).
+      distanceInterval: 80,
+      // Tiempo mínimo entre actualizaciones (OS puede ignorarlo en background)
+      timeInterval: 15000,
+      // Acumula hasta 3 puntos antes de despertar la app (eficiencia de batería)
+      deferredUpdatesDistance: 80,
+      deferredUpdatesInterval: 15000,
+      // Mantiene la precisión aunque el OS intente bajarla en background
+      pausesUpdatesAutomatically: false,
+      // Android: evita que el OS mate la tarea GPS
+      showsBackgroundLocationIndicator: true,
       foregroundService: {
-        notificationTitle: "Bitácora57",
-        notificationBody: "Ruta activa: Registrando ubicación...",
-        notificationColor: "#2980b9",
+        notificationTitle: "Bitácora57 — Ruta activa",
+        notificationBody: "Registrando ubicación en segundo plano...",
+        notificationColor: "#D4AF37",
+        // ✅ killServiceOnDestroy: false evita que Android detenga el GPS
+        // cuando el usuario desliza la app del recents
+        killServiceOnDestroy: false,
       },
     });
     console.log("✅ Rastreo iniciado");
@@ -158,7 +173,8 @@ export const obtenerDireccion = async (lat?: number, long?: number): Promise<str
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true, 
+    shouldShowList: true,   
     shouldPlaySound: false,
     shouldSetBadge: false,
   }),

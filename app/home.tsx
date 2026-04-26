@@ -9,8 +9,8 @@ import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location'; 
 import Purchases from 'react-native-purchases';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { db_firestore } from '../src/services/firebaseConfig';
+// ✅ CAMBIADO: firebase/firestore + firebaseConfig → supabase
+import { supabase } from '../src/services/supabaseClient';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const COLORS = {
@@ -55,9 +55,18 @@ export default function Home() {
     } catch (e) { console.log(e); }
   };
 
+  // ✅ CAMBIADO: AsyncStorage USER_SESSION → supabase.auth + tabla operadores
   const cargarUsuario = async () => {
-    const user = await AsyncStorage.getItem('USER_SESSION');
-    if (user) setUsuario(JSON.parse(user));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const { data: perfil } = await supabase
+        .from('operadores')
+        .select('nombre, foto_url, empresa')
+        .eq('auth_id', session.user.id)
+        .maybeSingle();
+      if (perfil) setUsuario({ nombre: perfil.nombre, foto: perfil.foto_url, empresa: perfil.empresa });
+    } catch (e) { console.log('[Home] Error cargando usuario:', e); }
   };
 
   // =========================================================================
@@ -133,19 +142,25 @@ export default function Home() {
     ]);
   };
 
+  // ✅ CAMBIADO: addDoc(db_firestore, 'alertas_inspeccion') → supabase.from('eventos_ruta').insert()
   const registrarEventoEmergencia = async () => {
     setLoadingGPS(true);
     try {
-      let location = await Location.getCurrentPositionAsync({});
-      await addDoc(collection(db_firestore, `alertas_inspeccion`), {
-        usuario: usuario?.nombre || 'Desconocido',
-        tipo: 'PANICO_EMERGENCIA',
-        ubicacion: { lat: location.coords.latitude, long: location.coords.longitude },
-        timestamp: Timestamp.now()
+      const location = await Location.getCurrentPositionAsync({});
+      const lat = location.coords.latitude;
+      const lng = location.coords.longitude;
+      const { data: { session } } = await supabase.auth.getSession();
+      await supabase.from('eventos_ruta').insert({
+        tipo:        'panico',
+        lat,
+        lng,
+        descripcion: `EMERGENCIA S.O.S — ${usuario?.nombre || 'Operador'} — ${new Date().toLocaleString('es-MX')}`,
+        activo:      true,
+        // operador_id se resuelve en Supabase via RLS con auth.uid()
       });
-      Alert.alert("🚨 ENVIADA");
+      Alert.alert("🚨 ENVIADA", "Alerta de emergencia registrada. Llama al 911 si necesitas ayuda inmediata.");
     } catch (error) {
-      Alert.alert("Error", "Llamar al 911.");
+      Alert.alert("Error", "No se pudo enviar. Llama al 911.");
     } finally {
       setLoadingGPS(false);
     }

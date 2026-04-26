@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Application from 'expo-application';
 import { exportarBaseDatos, importarBaseDatos } from '../db/database';
 
 const COLORS = {
@@ -161,7 +162,7 @@ export default function Configuracion() {
         <Text style={[styles.sectionLabel, { marginTop: 32 }]}>ACERCA DE LA APP</Text>
 
         <LinearGradient colors={GRADIENTS.cardBg} style={styles.infoCard}>
-          <InfoRow icon="identifier"        label="Versión"          value="3.0.2" />
+          <InfoRow icon="identifier"        label="Versión"          value={Application.nativeApplicationVersion || "3.0.2"} />
           <InfoRow icon="android"           label="Plataforma"       value={Platform.OS === 'ios' ? 'iOS' : 'Android'} />
           <InfoRow icon="shield-check"      label="NOM-087-SCT"      value="Habilitada" valueColor={COLORS.success} />
           <InfoRow icon="clipboard-check"   label="NOM-068-SCT"      value="Habilitada" valueColor={COLORS.success} />

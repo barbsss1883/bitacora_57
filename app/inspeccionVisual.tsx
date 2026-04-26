@@ -9,8 +9,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import FirmaDigital from '../src/components/FirmaDigital';
 import { guardarInspeccion } from '../db/database';
-// ✅ NUEVO: importar el servicio de reporte combinado
-import { generarReporteCompleto } from '../src/services/PdfReporteCompleto';
+// ✅ CAMBIADO: PdfReporteCompleto → PdfMaestro
+import { generarPdfMaestro } from '../src/services/PdfMaestro';
 
 const COLORS = {
   bg: '#010A14',
@@ -32,7 +32,6 @@ const GRADIENTS = {
   header: ['#051C33', '#010A14'],
 };
 
-// 🛠️ ACTUALIZADO: Lista oficial basada en la NOM-068-SCT
 const PUNTOS_REVISION = [
   { id: 'frenos', label: 'Sistema Frenos / Aire', icon: 'car-brake-fluid' },
   { id: 'llantas', label: 'Llantas / Rines / Birlos', icon: 'tire' },
@@ -54,7 +53,6 @@ export default function InspeccionVisual() {
   const [jornadaId, setJornadaId] = useState<number | null>(null);
   const [tipo, setTipo] = useState('inicio'); 
   
-  // LÓGICA: Iniciamos con todos los puntos en FALSE (Rojo/Mal)
   const [checklist, setChecklist] = useState<any>(() => {
     return PUNTOS_REVISION.reduce((acc, item) => ({ ...acc, [item.label]: false }), {});
   });
@@ -99,7 +97,6 @@ export default function InspeccionVisual() {
     try {
         const hoy = new Date().toLocaleDateString('en-CA');
 
-        // ✅ MODIFICADO: guardarInspeccion ahora retorna el id (ver database.ts)
         const inspeccionId = await guardarInspeccion(
             jornadaId || 0,
             tipo === 'inicio' ? 'SALIDA (NOM-068)' : 'LLEGADA (NOM-068)',
@@ -115,11 +112,13 @@ export default function InspeccionVisual() {
           "La inspección oficial ha sido guardada y está lista para exportarse en PDF."
         );
 
-        // ✅ NUEVO: Generar reporte completo NOM-068 + ELD en segundo plano.
-        // Se ejecuta sin await para no bloquear la navegación.
-        // Si el operador no tiene PRO, el servicio mostrará su propio Alert.
-        if (inspeccionId) {
-          generarReporteCompleto(inspeccionId, jornadaId || 0);
+        // ✅ CAMBIADO: generarReporteCompleto(inspeccionId, jornadaId)
+        //             → generarPdfMaestro({ jornadaId, inspeccionId })
+        // El PDF Maestro incluye NOM-068 + ELD + GPS + firma + QR + SHA-256.
+        // Solo se genera si hay jornadaId; si la inspección es libre (sin jornada)
+        // no se genera PDF automático (se puede hacer desde HistorialInspecciones).
+        if (inspeccionId && jornadaId) {
+          generarPdfMaestro({ jornadaId, inspeccionId });
         }
 
         router.replace('/home'); 
