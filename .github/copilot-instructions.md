@@ -10,34 +10,81 @@ The architecture is composed of two main parts:
 1.  **Mobile Application:** A React Native (with Expo) application for truck drivers. It features offline-first capabilities, background GPS tracking, and on-device document certification.
 2.  **Web Monitoring Center:** A web dashboard (`public/monitor.html`) for fleet managers to track vehicles in real-time.
 
-The backend is powered by **Firebase** (Firestore and Storage).
+The backend is powered by **Supabase** (PostgreSQL + S3-like storage). Credentials are in `src/services/supabaseClient.js` (public key hardcoded is safe for client).
 
 ## 2. Core Concepts & Technologies
 
-- **Offline-First (Mobile):** The mobile app is designed to work without a constant internet connection. All trip data is stored locally in an SQLite database. The logic for this is primarily in `db/database.ts`. Data is synchronized with Firebase when a connection is available.
-- **Data Synchronization:** The web dashboard reads from `jornadas` and `rutas_maestras` collections in Firestore. Be mindful of this dual-sync logic when working with data models.
-- **Digital Certification:** A key feature is the on-device generation of certified PDF documents. This involves:
+- **Offline-First (Mobile):** The mobile app is designed to work without a constant internet connection. All trip data is stored locally in an **SQLite database (WAL mode)** defined in `db/database.ts`. Data is synchronized to Supabase asynchronously via `SyncService.ts` when a connection is available.
+- **Data Synchronization:** Use `encolarSync()` — this is the **ONLY path** to backend operations. The sync queue persists in AsyncStorage if offline. Max 5 retries. Never make direct API calls.
+- **Background GPS Tracking:** The Expo TaskManager background task writes to SQLite only (~80m interval, ~450 points per 36km trip). No backend calls during TaskManager execution.
+- **Digital Certification:** On-device PDF generation with:
     - HTML to PDF conversion using `Expo Print`.
     - Capturing a digital signature (`src/components/FirmaDigital.tsx`).
-    - Generating a SHA1 hash of the document for integrity.
-    - A QR code for authorities to validate the document.
-- **Navigation:** The mobile app uses Expo Router for navigation. Screen files are located in the `app/` directory.
+    - **SHA256 seal** computed from `[jornada_id, operador, fecha_fin, km_totales]`.
+    - QR code linking to `public/validar.html` for authority validation.
+    - **RevenueCat subscription check** required before PDF generation.
+- **Navigation:** Expo Router with screens in `app/` directory.
+- **NOM-087 Compliance:** `validarTiemposSCT()` enforces federal driving time limits (built into core logic).
 
 ## 3. Key Files & Directories
 
--   `app/`: Contains the screens for the mobile application.
-    -   `jornadaEnCurso.tsx`: This is the core screen for an active trip, containing most of the business logic for tracking.
-    -   `inspeccionVisual.tsx`: The vehicle inspection checklist screen.
--   `db/database.ts`: Handles all SQLite database operations for the mobile app's offline functionality.
--   `src/services/`: Houses the main services for the application.
-    -   `LocationService.ts`: Manages background GPS tracking.
-    -   `PdfGenerator.ts`: Logic for creating the PDF documents.
-    -   `firebaseConfig.ts`: Firebase configuration (this file is gitignored and must be created locally).
--   `public/`: Contains the web-based components.
-    -   `monitor.html`: The real-time fleet monitoring dashboard.
-    -   `validar.html`: The page used by authorities to validate QR codes.
+Critical files for understanding the system:
 
-## 4. Developer Workflows
+-   **`db/database.ts`**: Defines SQLite schema, all domain types (`DatosJornada`, `RowPuntoGPS`, `Inspeccion`, etc.), and all CRUD operations. **Start here for data model changes.**
+-   **`app/jornadaEnCurso.tsx`**: Active trip screen with core business logic: trip state management, pause/resume, incident tracking, timer accuracy (uses refs to avoid stale state). **This is the most complex screen.**
+-   **`src/services/LocationService.ts`**: Background GPS TaskManager task (`LOCATION_TASK_NAME`). Writes directly to SQLite. Requires `ACCESS_FINE_LOCATION` + `ACCESS_BACKGROUND_LOCATION` permissions.
+-   **`src/services/SyncService.ts`**: Queue-based sync engine. Use `encolarSync(table, operation, data)` for ANY backend write.  Max 5 retries. Persists in AsyncStorage. **No direct Supabase calls.**
+-   **`src/services/PdfGenerator.ts`**: Generates certified PDFs with SHA256 seal + QR. Validates RevenueCat subscription before generation.
+-   **`src/services/supabaseClient.js`**: Supabase client configuration (public key safe for client).
+-   **`public/validar.html`**: Authority validation page for QR codes.
+-   **`public/monitor.html`**: Real-time fleet dashboard (reads `jornadas` collection).
+
+## 4. Critical Architectural Patterns
+
+**⚡ The Offline-First Pipeline**
+1. Write to local SQLite first
+2. Queue sync operation via `encolarSync()` 
+3. SyncService handles retry logic asynchronously
+4. On reconnect, queued operations are processed (max 5 retries)
+
+**🚫 No Direct API Calls**
+- Never call Supabase directly from screens
+- Always use `encolarSync(table, operation, data)` for any backend write
+- Background GPS task writes to SQLite only (no network calls)
+
+**📱 Timer State Management**
+- Use refs synced via `useEffect` to avoid stale closure state
+- Example in `jornadaEnCurso.tsx`: elapsed time calculations must reference current state
+- `setInterval` callbacks capture stale state—use refs as the source of truth
+
+**🗺️ GPS Precision** 
+- 80m interval captures curve details (~450 points per 36km trip)
+- Previous 500m interval caused straight-line routes
+- Don't change without testing on actual device
+
+**🔐 Digital Certification Flow**
+1. Check RevenueCat subscription (user must be PRO)
+2. Compute SHA256 seal from `[jornada_id, operador, fecha_fin, km_totales]`
+3. Generate PDF with embedded QR linking to `validar.html`
+4. Upload to Supabase Storage via `encolarSync()`
+
+**⚖️ NOM-087 Compliance**
+- `validarTiemposSCT()` enforces federal driving time limits
+- Built into trip validation logic
+- Violations block trip completion
+
+## 5. Common Pitfalls
+
+| Issue | Root Cause | Fix |
+|-------|---|---|
+| **Timer runs too fast/slow** | `setInterval` captures stale React state | Use refs synced via `useEffect` (see `jornadaEnCurso.tsx`) |
+| **GPS route is straight line** | 500m interval was too large | Confirmed working at 80m interval |
+| **Background sync fails** | LocationService task doesn't have Supabase initialized | Task writes SQLite only; foreground handles sync |
+| **PDF generation errors** | Non-PRO users not blocked | RevenueCat subscription must be validated before PDF creation |
+| **Inspection data access fails** | `.sort()` returns array, not object | Use `ultimaInspeccion[0].detalles_json` pattern |
+| **Dual location permission missing** | App requested only one permission | Request both `ACCESS_FINE_LOCATION` + `ACCESS_BACKGROUND_LOCATION` |
+
+## 6. Developer Workflows
 
 ### Running the project in development mode
 
@@ -58,8 +105,12 @@ For a local release build:
 cd android && ./gradlew assembleRelease
 ```
 
-## 5. Project-Specific Conventions
+## 7. Project-Specific Conventions
 
-- When working on features related to trip tracking, always consider the offline scenario first. Changes should be implemented in `db/database.ts` before being synchronized to Firebase.
-- For UI components, check `src/components/` for reusable elements before creating new ones.
-- Ensure any changes to document generation or certification (`PdfGenerator.ts`) are compliant with the specified regulations. The SHA1 hash is critical for document integrity.
+- **Local-First Always:** Start all changes in `db/database.ts` for data model; implement business logic offline-capable first
+- **No Direct Supabase:** Use `encolarSync()` exclusively—never call Supabase client directly from screens
+- **GPS = SQLite During Background:** Background tasks write only to SQLite; sync happens in foreground via SyncService
+- **Every Trip Must Be Certified:** Digital signature + SHA256 seal are mandatory—validate before PDF upload
+- **Component Reusability:** Check `src/components/` before creating new ones (e.g., `FirmaDigital.tsx`, `MonitorFatiga.tsx`)
+- **NOM-087 Built-In:** Regulatory time limits are enforced automatically—don't bypass `validarTiemposSCT()`
+- **Testing:** No automated test suite—changes require manual device validation with live Supabase credentials

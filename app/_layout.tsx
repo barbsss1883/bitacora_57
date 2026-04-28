@@ -1,38 +1,20 @@
-// ─── CAMBIOS RESPECTO AL ORIGINAL ────────────────────────────────────────────
-// 1. Sin Firebase — este archivo ya no lo usaba.
-//
-// 2. AGREGADO: supabase.auth.onAuthStateChange()
-//    Escucha expiración de token y logout desde cualquier pantalla.
-//    Si la sesión se pierde → redirige a /login automáticamente.
-//
-// 3. AGREGADO: procesarColaSync() al arrancar
-//    Drena los items offline que quedaron pendientes del viaje anterior.
-//
-// 4. AGREGADO: NetInfo listener
-//    Re-sincroniza la cola cada vez que el dispositivo recupera conexión.
-//
-// 5. Sin cambios en: GoogleSignin, Purchases, initDatabase, Stack screens.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef } from 'react';
-import { StatusBar, ActivityIndicator, View, Platform, Alert } from 'react-native'; 
+import { StatusBar, ActivityIndicator, View, Platform, Alert } from 'react-native';
 import { initDatabase } from '../db/database';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import Purchases from 'react-native-purchases';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// ✅ AGREGADO: supabase para sesión + SyncService para cola offline
 import { supabase } from '../src/services/supabaseClient';
 import { procesarColaSync } from '../src/services/SyncService';
 
 const API_KEY = 'goog_DzTkRNvkOzigskDvblAaBCgMPQl';
 
 export default function Layout() {
-  const router    = useRouter();
+  const router = useRouter();
   const [dbLista, setDbLista] = useState(false);
-  // Evita redirigir antes de que el Stack esté montado
-  const appLista  = useRef(false);
+  const appLista = useRef(false);
 
   useEffect(() => {
     // ── Google Sign-In ───────────────────────────────────────────────────────
@@ -56,7 +38,7 @@ export default function Layout() {
         appLista.current = true;
 
         // ✅ AGREGADO: drenar cola offline del viaje/sesión anterior
-        procesarColaSync().catch(() => {});
+        procesarColaSync().catch(() => { });
       })
       .catch(e => {
         console.error('Error fatal DB:', e);
@@ -64,17 +46,6 @@ export default function Layout() {
         appLista.current = true;
       });
 
-    // ✅ ACTUALIZADO: listener de sesión Supabase con protección de jornada activa
-    // Problema anterior: router.replace('/login') se disparaba aunque el operador
-    // estuviera en medio de un viaje, perdiendo horas de registro ELD.
-    //
-    // Solución: antes de redirigir, verificar CURRENT_JORNADA_ID en AsyncStorage.
-    //   - Si hay jornada activa → no redirigir. Mostrar aviso y dejar al operador
-    //     terminar su viaje. La sesión se renovará al reconectar.
-    //   - Si no hay jornada → redirigir normalmente a /login.
-    //   - TOKEN_REFRESHED → solo log, no acción.
-    //   - SIGNED_OUT explícito (el usuario cerró sesión desde perfil) → sí redirigir,
-    //     incluso con jornada activa, pero con confirmación.
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!appLista.current) return;
 
@@ -91,7 +62,7 @@ export default function Layout() {
       try {
         const jornadaId = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
         jornadaActiva = !!jornadaId;
-      } catch (_) {}
+      } catch (_) { }
 
       if (event === 'SIGNED_OUT' && jornadaActiva) {
         // Cierre de sesión manual con jornada activa → pedir confirmación
@@ -124,9 +95,6 @@ export default function Layout() {
       }
 
       if (jornadaActiva) {
-        // Token expirado pero jornada activa → NO redirigir
-        // El GPS y SQLite siguen funcionando offline. Supabase reintentará
-        // cuando el token se renueve o el operador termine el viaje.
         console.warn('[Layout] Sesión expirada con jornada activa — manteniendo pantalla para no interrumpir ELD');
         return;
       }
@@ -139,7 +107,7 @@ export default function Layout() {
     // ✅ AGREGADO: re-sincronizar cola offline al recuperar conexión a internet
     const unsubscribeNet = NetInfo.addEventListener((state) => {
       if (state.isConnected && appLista.current) {
-        procesarColaSync().catch(() => {});
+        procesarColaSync().catch(() => { });
       }
     });
 
@@ -149,7 +117,7 @@ export default function Layout() {
       unsubscribeNet();
     };
   }, []);
-  
+
   if (!dbLista) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center' }}>
