@@ -45,7 +45,7 @@ import {
 import {
   iniciarNuevaJornada, finalizarJornada, insertarPausa, insertarIncidencia,
   obtenerDetalleJornada, vincularInspeccionAViaje, obtenerKmTotalesJornada,
-  calcularDistanciaTotalKm,
+  calcularDistanciaTotalKm, getDB,
 } from '../db/database';
 import FirmaDigital from '../src/components/FirmaDigital';
 import { generarPdfMaestro } from '../src/services/PdfMaestro';
@@ -266,14 +266,27 @@ export default function JornadaEnCurso() {
 
     try {
       const nuevoId = await iniciarNuevaJornada(datosParaGuardar);
-      const ahora   = new Date().toISOString();
+
+      // Leer fecha_inicio y sello_digital exactos que quedaron en SQLite
+      let fechaInicioExacta = new Date().toISOString();
+      let selloDigitalInicio: string | null = null;
+      if (nuevoId) {
+        try {
+          const dbInst = await getDB();
+          const row = await dbInst.getFirstAsync<{ fecha_inicio: string; sello_digital: string }>(
+            'SELECT fecha_inicio, sello_digital FROM jornadas WHERE id = ?', [nuevoId]
+          );
+          if (row) { fechaInicioExacta = row.fecha_inicio; selloDigitalInicio = row.sello_digital ?? null; }
+        } catch (_) {}
+      }
+
       await AsyncStorage.setItem('CURRENT_JORNADA_ID',      String(nuevoId));
-      await AsyncStorage.setItem('CURRENT_JORNADA_START',   ahora);
+      await AsyncStorage.setItem('CURRENT_JORNADA_START',   fechaInicioExacta);
       await AsyncStorage.setItem('CURRENT_JORNADA_OPERADOR', formulario.operador);
       await AsyncStorage.setItem('CURRENT_JORNADA_UNIDAD',  formulario.unidad);
       const datosVis = { unidad: formulario.unidad, operador: formulario.operador };
       await AsyncStorage.setItem('CURRENT_JORNADA_VISUAL', JSON.stringify(datosVis));
-      setJornadaId(nuevoId); setFechaInicio(ahora); setVisuales(datosVis);
+      setJornadaId(nuevoId); setFechaInicio(fechaInicioExacta); setVisuales(datosVis);
 
       if (nuevoId) await vincularInspeccionAViaje(Number(nuevoId));
 
@@ -287,8 +300,9 @@ export default function JornadaEnCurso() {
         id_interno:         nuevoId,
         empresa:            formulario.permisionario,
         estatus:            'en_curso',
-        fecha_inicio:       ahora,
-        fecha_inicio_local: ahora,
+        fecha_inicio:       fechaInicioExacta,
+        fecha_inicio_local: fechaInicioExacta,
+        sello_digital:      selloDigitalInicio,
       });
 
       Alert.alert('¡Buen Viaje!', 'Bitácora iniciada.');

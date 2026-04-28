@@ -223,11 +223,15 @@ export const initDatabase = async () => {
   }
 };
 
-export const generarSelloDigital = async (id: number, fechaFin: string, operador: string, km: number) => {
+export const generarSelloDigital = async (
+  id: number,
+  fechaInicio: string,
+  operador: string,
+  unidad: string
+): Promise<string> => {
   try {
-    const dataString = `B57-${id}-${operador}-${fechaFin}-${km}`;
-    const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, dataString);
-    return hash.substring(0, 16).toUpperCase();
+    const payload = JSON.stringify({ id, operador, unidad, fecha_inicio: fechaInicio });
+    return await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, payload);
   } catch (e) {
     console.error('Error generando sello:', e);
     return 'ERROR_HASH';
@@ -255,7 +259,12 @@ export const iniciarNuevaJornada = async (datos: DatosJornada): Promise<number |
         datos.destino, datos.tipo_servicio, fecha,
       ]
     );
-    return res.lastInsertRowId;
+    const id = res.lastInsertRowId;
+    if (id) {
+      const sello = await generarSelloDigital(id, fecha, datos.operador, datos.unidad);
+      await db.runAsync('UPDATE jornadas SET sello_digital = ? WHERE id = ?', [sello, id]);
+    }
+    return id;
   } catch (e) {
     console.error('iniciarNuevaJornada error:', e);
     return null;
@@ -271,9 +280,6 @@ export const finalizarJornada = async (
   try {
     const db = await getDB();
     const fin = new Date().toISOString();
-    const jornada = await db.getFirstAsync<RowJornada>('SELECT operador FROM jornadas WHERE id = ?', [id]);
-    const operador = jornada?.operador || 'Anonimo';
-
     let rutaFinal = rutaGeoJson;
     if (!rutaFinal) {
       const puntosGPS = await db.getAllAsync<RowPuntoGPS>(
@@ -296,10 +302,9 @@ export const finalizarJornada = async (
       }
     }
 
-    const sello = await generarSelloDigital(id, fin, operador, kmTotales);
     await db.runAsync(
-      `UPDATE jornadas SET fecha_fin = ?, firma = ?, ruta_geojson = ?, km_totales = ?, sello_digital = ?, estatus = 'finalizado' WHERE id = ?`,
-      [fin, firma || '', rutaFinal || null, kmTotales, sello, id]
+      `UPDATE jornadas SET fecha_fin = ?, firma = ?, ruta_geojson = ?, km_totales = ?, estatus = 'finalizado' WHERE id = ?`,
+      [fin, firma || '', rutaFinal || null, kmTotales, id]
     );
     return true;
   } catch (e) {

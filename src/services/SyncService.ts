@@ -154,7 +154,7 @@ const enviarASupabase = async (item: ItemSync): Promise<void> => {
     // Era: setDoc(doc(db_firestore, 'jornadas', id), datos)
     // Ahora: upsert en viajes — id_local es la clave de deduplicación
     case 'jornada_inicio': {
-      const { id_interno, empresa, estatus, fecha_inicio, ...datos } = payload;
+      const { id_interno, empresa, estatus, fecha_inicio, sello_digital, ...datos } = payload;
       const { error } = await supabase
         .from('viajes')
         .upsert(
@@ -162,11 +162,11 @@ const enviarASupabase = async (item: ItemSync): Promise<void> => {
             id_local:          id_interno,
             estado:            ['activo','pausado','finalizado','cancelado'].includes(estatus) ? estatus : 'activo',
             inicio_jornada:    fecha_inicio ?? ahora,
+            hash_sha256:       sello_digital ?? null,
             origen_nombre:     datos.origen   ?? null,
             destino_nombre:    datos.destino  ?? null,
             carga_descripcion: datos.tipo_servicio ?? null,
             updated_at:        ahora,
-            // Datos del formulario que no tienen columna propia → metadata JSONB
             metadata: {
               permisionario:     empresa,
               unidad:            datos.unidad,
