@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aviso de Privacidad — Bitácora 57</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --asphalt:   #060d16;
+  --dark:      #0b1622;
+  --panel:     #0f1e2e;
+  --border:    #1a2d42;
+  --amber:     #f59e0b;
+  --amber-dim: #d97706;
+  --white:     #f0f4f8;
+  --muted:     #6b8299;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-ui:      'Barlow Condensed', sans-serif;
+  --font-body:    'Barlow', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--asphalt);
+  color: var(--white);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: .6;
+}
+.road-stripe {
+  height: 4px;
+  background: repeating-linear-gradient(90deg,
+    var(--amber) 0, var(--amber) 40px,
+    transparent 40px, transparent 80px);
+  opacity: .7;
+}
+
+/* NAV */
+nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 48px;
+  background: rgba(6,13,22,.95);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  font-family: var(--font-display);
+  font-size: 26px;
+  color: var(--amber);
+  letter-spacing: 2px;
+  text-decoration: none;
+}
+.nav-back {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: color .2s;
+}
+.nav-back:hover { color: var(--white); }
+
+/* LAYOUT */
+.hero {
+  padding: 72px 48px 40px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.3);
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 20px;
+}
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(38px, 6vw, 62px);
+  line-height: 1;
+  letter-spacing: 2px;
+  margin-bottom: 14px;
+}
+h1 span { color: var(--amber); }
+.subtitle {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+.update-tag {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  opacity: .7;
+}
+
+/* CONTENT */
+.container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 48px 80px;
+}
+
+/* TOC */
+.toc {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  border-radius: 8px;
+  padding: 24px 28px;
+  margin-bottom: 48px;
+}
+.toc h3 {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.toc ol {
+  list-style: none;
+  counter-reset: toc;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 24px;
+}
+@media (max-width: 560px) { .toc ol { grid-template-columns: 1fr; } }
+.toc li {
+  counter-increment: toc;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+.toc li::before {
+  content: counter(toc, decimal-leading-zero) ". ";
+  color: var(--amber);
+  margin-right: 4px;
+}
+.toc li a {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color .2s;
+}
+.toc li a:hover { color: var(--white); }
+
+/* SECTIONS */
+.section {
+  margin-bottom: 52px;
+  scroll-margin-top: 80px;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.section-num {
+  font-family: var(--font-display);
+  font-size: 36px;
+  color: var(--amber);
+  opacity: .4;
+  line-height: 1;
+  min-width: 48px;
+}
+.section h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: 1.5px;
+  color: var(--white);
+}
+
+p {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin-bottom: 14px;
+}
+p strong { color: var(--white); }
+p a { color: var(--amber); text-decoration: none; }
+p a:hover { text-decoration: underline; }
+
+/* data table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+.data-table th {
+  background: rgba(245,158,11,.08);
+  color: var(--amber);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.data-table td {
+  padding: 12px 16px;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(26,45,66,.5);
+  vertical-align: top;
+  line-height: 1.6;
+}
+.data-table td:first-child { color: var(--white); font-family: var(--font-ui); font-weight: 600; }
+.data-table tr:last-child td { border-bottom: none; }
+
+/* highlight box */
+.highlight-box {
+  background: rgba(245,158,11,.06);
+  border: 1px solid rgba(245,158,11,.2);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.highlight-box strong { color: var(--amber); }
+
+/* rights list */
+.rights-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 560px) { .rights-grid { grid-template-columns: 1fr; } }
+.right-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.right-card .right-letter {
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: var(--amber);
+  opacity: .5;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.right-card h4 {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  color: var(--white);
+  margin-bottom: 6px;
+}
+.right-card p {
+  font-size: 13px;
+  margin: 0;
+}
+
+/* contact card */
+.contact-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 28px;
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.contact-icon { font-size: 32px; }
+.contact-card h4 {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  color: var(--white);
+  margin-bottom: 8px;
+}
+.contact-card p { margin: 0; font-size: 14px; }
+.contact-card a { color: var(--amber); }
+
+/* footer */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 32px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.footer-logo {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--amber);
+  letter-spacing: 2px;
+}
+.footer-note { font-size: 13px; color: var(--muted); }
+.footer-note a { color: var(--amber); text-decoration: none; }
+
+@media (max-width: 600px) {
+  nav, .hero, .container, footer { padding-left: 20px; padding-right: 20px; }
+  footer { flex-direction: column; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+
+<div class="road-stripe"></div>
+
+<nav>
+  <a href="/" class="nav-logo">BITÁCORA 57</a>
+  <a href="/" class="nav-back">← Volver al inicio</a>
+</nav>
+
+<section class="hero">
+  <div class="badge">⚖️ &nbsp;Marco legal — LFPDPPP</div>
+  <h1>AVISO DE <span>PRIVACIDAD</span></h1>
+  <p class="subtitle">Bitácora 57 se compromete a proteger la privacidad y los datos personales de sus usuarios conforme a la legislación mexicana vigente.</p>
+  <p class="update-tag">Última actualización: 1 de mayo de 2025 &nbsp;·&nbsp; Versión 1.0</p>
+</section>
+
+<div class="container">
+
+  <!-- TOC -->
+  <div class="toc">
+    <h3>Contenido</h3>
+    <ol>
+      <li><a href="#responsable">Responsable del tratamiento</a></li>
+      <li><a href="#datos">Datos personales recabados</a></li>
+      <li><a href="#finalidades">Finalidades del tratamiento</a></li>
+      <li><a href="#ubicacion">Uso de geolocalización</a></li>
+      <li><a href="#transferencias">Transferencias de datos</a></li>
+      <li><a href="#derechos">Derechos ARCO</a></li>
+      <li><a href="#cookies">Cookies y tecnologías similares</a></li>
+      <li><a href="#cambios">Cambios al aviso</a></li>
+      <li><a href="#contacto">Contacto</a></li>
+    </ol>
+  </div>
+
+  <!-- 01 -->
+  <div class="section" id="responsable">
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <h2>RESPONSABLE DEL TRATAMIENTO</h2>
+    </div>
+    <p>
+      <strong>Bitácora 57</strong> (en adelante "la Aplicación"), con identificador de paquete <strong>com.luisg0418.bitacora57</strong>, es responsable del tratamiento de los datos personales que usted proporciona al usar la aplicación móvil disponible en Google Play Store.
+    </p>
+    <p>
+      Para cualquier asunto relacionado con sus datos personales puede contactarnos a través del correo electrónico: <strong><a href="mailto:soportebitacora57@gmail.com">soportebitacora57@gmail.com</a></strong>
+    </p>
+    <div class="highlight-box">
+      <strong>Marco legal aplicable:</strong> El presente aviso se emite en cumplimiento de la <strong>Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP)</strong> y su Reglamento, así como los Lineamientos del Aviso de Privacidad emitidos por el INAI.
+    </div>
+  </div>
+
+  <!-- 02 -->
+  <div class="section" id="datos">
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <h2>DATOS PERSONALES RECABADOS</h2>
+    </div>
+    <p>La Aplicación recaba las siguientes categorías de datos personales:</p>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Categoría</th>
+          <th>Datos específicos</th>
+          <th>Fuente</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Identificación del operador</td>
+          <td>Nombre completo, RFC, número de licencia federal, número económico del operador</td>
+          <td>Proporcionado por el usuario</td>
+        </tr>
+        <tr>
+          <td>Datos del vehículo</td>
+          <td>Placas, número de motor, número de serie (NIV), modelo, tipo de configuración vehicular</td>
+          <td>Proporcionado por el usuario</td>
+        </tr>
+        <tr>
+          <td>Geolocalización</td>
+          <td>Coordenadas GPS (latitud/longitud), velocidad, altitud, rutas recorridas, puntos de parada</td>
+          <td>Generado automáticamente durante el uso</td>
+        </tr>
+        <tr>
+          <td>Registros de actividad</td>
+          <td>Horas de manejo, pausas, descansos, jornadas (ELD), fechas y horas de inicio/fin de viaje</td>
+          <td>Generado automáticamente durante el uso</td>
+        </tr>
+        <tr>
+          <td>Registros de inspección</td>
+          <td>Estado de frenos, llantas, luces, sistema de escape y otros componentes inspeccionados</td>
+          <td>Proporcionado por el usuario</td>
+        </tr>
+        <tr>
+          <td>Datos de contacto</td>
+          <td>Correo electrónico (para registro y soporte)</td>
+          <td>Proporcionado por el usuario</td>
+        </tr>
+        <tr>
+          <td>Datos de dispositivo</td>
+          <td>Identificador de publicidad (Advertising ID), versión del sistema operativo, modelo del dispositivo</td>
+          <td>Generado automáticamente</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>La Aplicación <strong>no recaba</strong> datos sensibles como información financiera bancaria, datos biométricos, origen racial o étnico, ni afiliaciones políticas o religiosas.</p>
+  </div>
+
+  <!-- 03 -->
+  <div class="section" id="finalidades">
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <h2>FINALIDADES DEL TRATAMIENTO</h2>
+    </div>
+    <p><strong>Finalidades primarias</strong> (necesarias para la prestación del servicio):</p>
+    <table class="data-table">
+      <thead>
+        <tr><th>Finalidad</th><th>Descripción</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Cumplimiento NOM-087-SCT-2-2017</td>
+          <td>Registro automatizado de horas de servicio (ELD), cronómetros de manejo, pausa y descanso conforme a la normativa de la SICT.</td>
+        </tr>
+        <tr>
+          <td>Cumplimiento NOM-068-SCT-2-2014</td>
+          <td>Registro digital de la inspección físico-mecánica del vehículo antes de cada viaje.</td>
+        </tr>
+        <tr>
+          <td>Generación de documentos oficiales</td>
+          <td>Creación de reportes PDF con sello digital criptográfico (SHA-256) y código QR verificable para presentación ante autoridades.</td>
+        </tr>
+        <tr>
+          <td>Rastreo de rutas</td>
+          <td>Registro de la ruta GPS recorrida para integración en la bitácora digital y cálculo de kilómetros.</td>
+        </tr>
+        <tr>
+          <td>Gestión de la cuenta</td>
+          <td>Identificación del operador, autenticación y administración de la suscripción.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p><strong>Finalidades secundarias</strong> (puede oponerse a ellas sin afectar el servicio):</p>
+    <table class="data-table">
+      <thead>
+        <tr><th>Finalidad</th><th>Descripción</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Mejora del servicio</td>
+          <td>Análisis estadístico agregado y anónimo para identificar y corregir problemas técnicos.</td>
+        </tr>
+        <tr>
+          <td>Comunicaciones informativas</td>
+          <td>Envío de notificaciones sobre actualizaciones de la aplicación o cambios en normativas aplicables.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>Si desea oponerse al tratamiento para finalidades secundarias, envíe su solicitud a <a href="mailto:soportebitacora57@gmail.com">soportebitacora57@gmail.com</a>.</p>
+  </div>
+
+  <!-- 04 -->
+  <div class="section" id="ubicacion">
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <h2>USO DE GEOLOCALIZACIÓN</h2>
+    </div>
+    <div class="highlight-box">
+      <strong>⚠️ Divulgación prominente:</strong> Bitácora 57 recopila datos de ubicación en segundo plano, incluso cuando la aplicación está minimizada o el dispositivo está bloqueado. Esto es indispensable para el cumplimiento normativo de la NOM-087-SCT-2-2017.
+    </div>
+    <p>
+      La Aplicación utiliza la ubicación en <strong>segundo plano</strong> exclusivamente para:
+    </p>
+    <p>
+      Registrar con precisión las rutas recorridas durante una jornada activa, detectar automáticamente movimiento o detención del vehículo, calcular los tiempos de manejo y pausas requeridos por la norma, e integrar los datos de ruta en los reportes PDF oficiales que el operador presenta ante la Guardia Nacional o la SICT.
+    </p>
+    <p>
+      Los datos de geolocalización <strong>se almacenan localmente</strong> en el dispositivo del usuario mediante SQLite. No se transmiten a servidores externos de terceros sin el consentimiento explícito del usuario, salvo lo indicado en la sección de transferencias.
+    </p>
+    <p>
+      El acceso a la ubicación en segundo plano puede revocarse en cualquier momento desde los ajustes de permisos de su dispositivo Android. Al hacerlo, las funciones de registro de jornadas y generación de reportes dejarán de funcionar correctamente.
+    </p>
+  </div>
+
+  <!-- 05 -->
+  <div class="section" id="transferencias">
+    <div class="section-header">
+      <span class="section-num">05</span>
+      <h2>TRANSFERENCIAS DE DATOS</h2>
+    </div>
+    <p>Sus datos personales pueden ser compartidos con los siguientes terceros únicamente en la medida necesaria para la operación del servicio:</p>
+    <table class="data-table">
+      <thead>
+        <tr><th>Tercero</th><th>Propósito</th><th>País</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>RevenueCat, Inc.</td>
+          <td>Gestión de suscripciones y procesamiento de pagos a través de Google Play Billing</td>
+          <td>Estados Unidos</td>
+        </tr>
+        <tr>
+          <td>Google LLC (Google Play)</td>
+          <td>Distribución de la aplicación y procesamiento de compras in-app</td>
+          <td>Estados Unidos</td>
+        </tr>
+        <tr>
+          <td>Supabase, Inc.</td>
+          <td>Sincronización opcional de datos en la nube (backup)</td>
+          <td>Estados Unidos</td>
+        </tr>
+        <tr>
+          <td>Mapbox, Inc.</td>
+          <td>Renderizado de mapas y visualización de rutas GPS</td>
+          <td>Estados Unidos</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      Todos los proveedores listados cuentan con políticas de privacidad propias y ofrecen niveles de protección adecuados conforme a sus marcos normativos. Bitácora 57 <strong>no vende</strong> sus datos personales a terceros.
+    </p>
+    <p>
+      Sus datos podrán ser divulgados a autoridades competentes (SICT, Guardia Nacional, autoridades judiciales) únicamente cuando sea requerido por ley o en cumplimiento de una orden judicial.
+    </p>
+  </div>
+
+  <!-- 06 -->
+  <div class="section" id="derechos">
+    <div class="section-header">
+      <span class="section-num">06</span>
+      <h2>DERECHOS ARCO</h2>
+    </div>
+    <p>Conforme a la LFPDPPP, usted tiene los siguientes derechos respecto a sus datos personales:</p>
+    <div class="rights-grid">
+      <div class="right-card">
+        <div class="right-letter">A</div>
+        <h4>Acceso</h4>
+        <p>Conocer qué datos personales tenemos sobre usted y cómo los utilizamos.</p>
+      </div>
+      <div class="right-card">
+        <div class="right-letter">R</div>
+        <h4>Rectificación</h4>
+        <p>Solicitar la corrección de sus datos cuando sean inexactos o incompletos.</p>
+      </div>
+      <div class="right-card">
+        <div class="right-letter">C</div>
+        <h4>Cancelación</h4>
+        <p>Solicitar la eliminación de sus datos cuando considere que no son necesarios para las finalidades del tratamiento.</p>
+      </div>
+      <div class="right-card">
+        <div class="right-letter">O</div>
+        <h4>Oposición</h4>
+        <p>Oponerse al tratamiento de sus datos para finalidades específicas, en particular las secundarias.</p>
+      </div>
+    </div>
+    <p>
+      Para ejercer cualquiera de estos derechos, puede enviar su solicitud a <a href="mailto:soportebitacora57@gmail.com">soportebitacora57@gmail.com</a> indicando su nombre completo, el derecho que desea ejercer y el correo asociado a su cuenta. Responderemos en un plazo máximo de <strong>20 días hábiles</strong>.
+    </p>
+    <p>
+      También puede solicitar la <strong>eliminación completa de su cuenta y datos</strong> a través de nuestra página dedicada: <a href="/eliminar-cuenta">bitacora57.com/eliminar-cuenta</a>
+    </p>
+    <p>
+      Si considera que su solicitud no fue atendida satisfactoriamente, tiene derecho a acudir ante el <strong>Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales (INAI)</strong> en <a href="https://www.inai.org.mx" target="_blank" rel="noopener">www.inai.org.mx</a>.
+    </p>
+  </div>
+
+  <!-- 07 -->
+  <div class="section" id="cookies">
+    <div class="section-header">
+      <span class="section-num">07</span>
+      <h2>COOKIES Y TECNOLOGÍAS SIMILARES</h2>
+    </div>
+    <p>
+      La aplicación móvil Bitácora 57 <strong>no utiliza cookies</strong>. Sin embargo, el sistema operativo Android asigna un <strong>Advertising ID (GAID)</strong> al dispositivo que puede ser accedido por la aplicación. Este identificador puede ser utilizado para análisis agregado del uso de la aplicación.
+    </p>
+    <p>
+      Usted puede restablecer o deshabilitar el Advertising ID desde: <strong>Ajustes → Google → Anuncios → Eliminar ID de publicidad</strong> en su dispositivo Android.
+    </p>
+  </div>
+
+  <!-- 08 -->
+  <div class="section" id="cambios">
+    <div class="section-header">
+      <span class="section-num">08</span>
+      <h2>CAMBIOS AL AVISO DE PRIVACIDAD</h2>
+    </div>
+    <p>
+      Bitácora 57 se reserva el derecho de modificar el presente Aviso de Privacidad en cualquier momento para reflejar cambios en la aplicación, en la legislación aplicable o en nuestras prácticas de tratamiento de datos.
+    </p>
+    <p>
+      Cualquier modificación será notificada a través de la propia aplicación y/o mediante un aviso en esta página web. La fecha de "Última actualización" al inicio del documento siempre reflejará la versión vigente.
+    </p>
+    <p>
+      El uso continuado de la aplicación tras la publicación de cambios constituye su aceptación de las nuevas condiciones.
+    </p>
+  </div>
+
+  <!-- 09 -->
+  <div class="section" id="contacto">
+    <div class="section-header">
+      <span class="section-num">09</span>
+      <h2>CONTACTO</h2>
+    </div>
+    <p>Para cualquier duda, solicitud o aclaración relacionada con este Aviso de Privacidad o con el tratamiento de sus datos personales:</p>
+    <div class="contact-card">
+      <div class="contact-icon">✉️</div>
+      <div>
+        <h4>Correo electrónico</h4>
+        <p>Escriba a <a href="mailto:soportebitacora57@gmail.com">soportebitacora57@gmail.com</a> con el asunto <strong>"Privacidad — [su solicitud]"</strong>. Atendemos en un plazo máximo de 20 días hábiles.</p>
+      </div>
+    </div>
+    <div class="contact-card">
+      <div class="contact-icon">🗑️</div>
+      <div>
+        <h4>Eliminación de cuenta</h4>
+        <p>Para solicitar la eliminación de su cuenta y todos sus datos, visite: <a href="/eliminar-cuenta">bitacora57.com/eliminar-cuenta</a></p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <span class="footer-logo">BITÁCORA 57</span>
+  <span class="footer-note">© 2025 Bitácora 57 · <a href="/eliminar-cuenta">Eliminar mi cuenta</a> · Aviso de Privacidad</span>
+</footer>
+
+</body>
+</html>
