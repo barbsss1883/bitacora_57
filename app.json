@@ -15,7 +15,7 @@
     },
     "android": {
       "package": "com.luisg0418.bitacora57",
-      "versionCode": 76,
+      "versionCode": 77,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -49,9 +49,7 @@
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW"
-      ],
-      "edgeToEdgeEnabled": true,
-      "resizeableActivity": true
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.luisg0418.bitacora57"
@@ -75,18 +73,18 @@
         }
       ],
       [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsImpl": "mapbox",
+          "RNMapboxMapsDownloadToken": "sk.eyJ1IjoibHVpc2cwNDE4IiwiYSI6ImNtaXhqOGpqNjA1NDIzZnByOWc0dG16aXQifQ.tNo8k-4i6yXCpdGwR2dl3Q"
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Bitácora57 recopila datos de ubicación para registrar tu ruta y jornada laboral (NOM-087), incluso cuando la app está cerrada o no se usa.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
-        }
-      ],
-      [
-        "@rnmapbox/maps",
-        {
-          "RNMapboxMapsImpl": "mapbox",
-          "RNMapboxMapsDownloadToken": "sk.eyJ1IjoibHVpc2cwNDE4IiwiYSI6ImNtaXhqOGpqNjA1NDIzZnByOWc0dG16aXQifQ.tNo8k-4i6yXCpdGwR2dl3Q"
         }
       ],
       [

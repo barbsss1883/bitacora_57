@@ -26,10 +26,10 @@ const COLORS = {
 };
 
 const GRADIENTS = {
-  cardRed: ['#450A0A', '#2D0606', '#010A14'], 
-  cardGreen: ['#065F46', '#064E3B', '#022C22'], 
-  goldBtn: ['#D4AF37', '#C5A059', '#8A6E2F'],
-  header: ['#051C33', '#010A14'],
+  cardRed: ['#450A0A', '#2D0606', '#010A14'] as const,
+  cardGreen: ['#065F46', '#064E3B', '#022C22'] as const,
+  goldBtn: ['#D4AF37', '#C5A059', '#8A6E2F'] as const,
+  header: ['#051C33', '#010A14'] as const,
 };
 
 const PUNTOS_REVISION = [

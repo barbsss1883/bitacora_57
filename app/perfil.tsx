@@ -307,10 +307,7 @@ export default function Perfil() {
     if (tipo === 'pdf') {
       setCargandoPdf(true);
       try {
-        // ✅ expo-file-system nuevo — sin /legacy ni (as any)
-        const { File } = await import('expo-file-system');
-        const file = new File(uri);
-        const base64 = await file.readAsText('base64');
+        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' as any });
 
         const html = `<!DOCTYPE html>
 <html>

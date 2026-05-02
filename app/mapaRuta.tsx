@@ -87,10 +87,9 @@ const MapaRuta = () => {
     if (!ultimoPunto) { Alert.alert("Sin Ubicación", "Espera señal GPS."); return; }
     setDescargandoMapa(true);
     try {
-        // Corrección de coordenadas para el bounds
         const bounds = [
-            [ultimoPunto - 0.5, ultimoPunto - 0.5], 
-            [ultimoPunto + 0.5, ultimoPunto + 0.5]
+            [ultimoPunto[0] - 0.5, ultimoPunto[1] - 0.5],
+            [ultimoPunto[0] + 0.5, ultimoPunto[1] + 0.5]
         ];
         await Mapbox.offlineManager.createPack({ name: `ruta-${Date.now()}`, styleURL: 'mapbox://styles/mapbox/navigation-night-v1', minZoom: 10, maxZoom: 16, bounds: bounds as any }, (p: any) => setProgresoDescarga(Math.round(p.percentage)));
         Alert.alert("¡Listo!", "Mapa guardado para uso sin internet.");

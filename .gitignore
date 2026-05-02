@@ -46,3 +46,8 @@ Thumbs.db
 db/*.sqlite
 db/*.db
 db/*.sqlite3
+
+# Service account keys (contain private keys — never commit)
+google-service-account.json
+*-fb90d8209203.json
+*service_account*.json

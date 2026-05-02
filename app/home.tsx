@@ -23,8 +23,8 @@ const COLORS = {
 };
 
 const GRADIENTS = {
-  cardBg: ['#12365A', '#081D33', '#030E1A'],
-  emergencyBg: ['#A70000', '#7A0000', '#4A0000'], 
+  cardBg: ['#12365A', '#081D33', '#030E1A'] as const,
+  emergencyBg: ['#A70000', '#7A0000', '#4A0000'] as const,
 };
 
 const AD_UNIT_ID = __DEV__ ? TestIds.BANNER : "ca-app-pub-9657693965267569/4678645716";

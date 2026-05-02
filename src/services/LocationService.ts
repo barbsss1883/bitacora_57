@@ -222,27 +222,29 @@ export const iniciarNotificacionTemporizador = async (): Promise<void> => {
           let titulo = `📍 Jornada: ${tiempoManejo}`;
           let cuerpo = `${operador || 'Operador'} | ${unidad || 'Unidad'}`;
           let sonido = false;
-          if (validacionSCT.estado === 'ALERTA') {
-            titulo = `⚠️ RECORDATORIO SCT`;
-            cuerpo = `${validacionSCT.mensaje}\nTipo: Jornada ${tiempoManejo}`;
-            sonido = Math.floor(ahora.getTime() / 2000) % 2 === 0;
-            if (lastSCTAlertState !== 'ALERTA') {
-              lastSCTAlertState = 'ALERTA';
-              console.warn('⚠️ ALERTA SCT:', validacionSCT.mensaje);
+          if (validacionSCT) {
+            if (validacionSCT.estado === 'AVISO_CONTINUO') {
+              titulo = `⚠️ RECORDATORIO SCT`;
+              cuerpo = `${validacionSCT.mensaje}\nTipo: Jornada ${tiempoManejo}`;
+              sonido = Math.floor(ahora.getTime() / 2000) % 2 === 0;
+              if (lastSCTAlertState !== 'ALERTA') {
+                lastSCTAlertState = 'ALERTA';
+                console.warn('⚠️ ALERTA SCT:', validacionSCT.mensaje);
+              }
+            } else if (validacionSCT.estado === 'LIMITE_CONTINUO' || validacionSCT.estado === 'LIMITE_JORNADA') {
+              titulo = `❌ VIOLACIÓN SCT`;
+              cuerpo = `${validacionSCT.mensaje}\nDebes detener la jornada INMEDIATAMENTE`;
+              sonido = true;
+              if (lastSCTAlertState !== 'LIMITE') {
+                lastSCTAlertState = 'LIMITE';
+                console.error('❌ LÍMITE SCT:', validacionSCT.mensaje);
+              }
+            } else {
+              cuerpo += `\n⏱️ Conducción: ${(validacionSCT.tiempoConduccion / 60).toFixed(1)}h / 9h`;
+              lastSCTAlertState = '';
             }
-          } else if (validacionSCT.estado === 'LIMITE') {
-            titulo = `❌ VIOLACIÓN SCT`;
-            cuerpo = `${validacionSCT.mensaje}\nDebes detener la jornada INMEDIATAMENTE`;
-            sonido = true;
-            if (lastSCTAlertState !== 'LIMITE') {
-              lastSCTAlertState = 'LIMITE';
-              console.error('❌ LÍMITE SCT:', validacionSCT.mensaje);
-            }
-          } else {
-            cuerpo += `\n⏱️ Conducción: ${(validacionSCT.tiempoConduccion / 60).toFixed(1)}h / 9h`;
-            lastSCTAlertState = '';
           }
-          
+
           if (lastNotificationId) {
             try {
               await Notifications.dismissNotificationAsync(lastNotificationId);
@@ -250,7 +252,7 @@ export const iniciarNotificacionTemporizador = async (): Promise<void> => {
               console.log("No se pudo descartar notificación anterior");
             }
           }
-          
+
           lastNotificationId = await Notifications.scheduleNotificationAsync({
             identifier: 'bitacora-timer-ruta',
             content: {
@@ -258,7 +260,7 @@ export const iniciarNotificacionTemporizador = async (): Promise<void> => {
               body: cuerpo,
               badge: 1,
               sound: sonido ? 'default' : false,
-              sticky: validacionSCT.estado !== 'NORMAL',
+              sticky: validacionSCT?.estado !== 'OK',
             },
             trigger: null,
           });

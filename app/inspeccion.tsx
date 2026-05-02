@@ -324,7 +324,7 @@ export default function PantallaELD() {
       cargarTodoElELD();
       cargarHistorial();
     });
-    return () => desuscribir();
+    return () => { desuscribir(); };
   }, [cargarHistorial]);
 
   useEffect(() => {

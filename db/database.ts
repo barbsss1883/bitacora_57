@@ -1,5 +1,4 @@
 import * as SQLite from 'expo-sqlite';
-import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Crypto from 'expo-crypto';
@@ -791,8 +790,8 @@ export const validarTiemposSCT = async (jornadaId: number, fechaInicio: string):
 export const exportarBaseDatos = async () => {
   try {
     // ✅ Nueva API unificada sin expo-file-system/legacy ni (as any)
-    const { File } = await import('expo-file-system');
-    const dbUri = FileSystem.documentDirectory + 'SQLite/bitacora.db';
+    const { File, Paths } = await import('expo-file-system');
+    const dbUri = Paths.document.uri + 'SQLite/bitacora.db';
     const dbFile = new File(dbUri);
     if (!(await dbFile.exists)) return false;
     if (!(await Sharing.isAvailableAsync())) return false;
@@ -807,11 +806,11 @@ export const exportarBaseDatos = async () => {
 export const importarBaseDatos = async () => {
   try {
     // ✅ File.copy() reemplaza FileSystem.copyAsync() deprecado
-    const { File } = await import('expo-file-system');
+    const { File, Paths } = await import('expo-file-system');
     const res = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
-    if (!res || !res.uri) return false;
-    const src  = new File(res.uri);
-    const dest = new File(FileSystem.documentDirectory + 'SQLite/bitacora.db');
+    if (res.canceled || !res.assets?.[0]?.uri) return false;
+    const src  = new File(res.assets[0].uri);
+    const dest = new File(Paths.document.uri + 'SQLite/bitacora.db');
     await src.copy(dest);
     cachedDb = null;
     return true;

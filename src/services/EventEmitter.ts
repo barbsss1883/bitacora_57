@@ -22,9 +22,9 @@ class JornadaStateEmitter extends EventEmitter {
   }
 
   // Escuchar cambios de estado (Devuelve función de limpieza)
-  onEstadoCambio(callback: (estado: string) => void) {
+  onEstadoCambio(callback: (estado: string) => void): () => void {
     this.on('ESTADO_CAMBIO', callback);
-    return () => this.removeListener('ESTADO_CAMBIO', callback);
+    return () => { this.removeListener('ESTADO_CAMBIO', callback); };
   }
 
   // Emitir cuando se inicia pausa

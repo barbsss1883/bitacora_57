@@ -9,7 +9,7 @@ const COLORS = {
   danger: '#ef4444'
 };
 
-export const ProminentDisclosure = ({ isVisible, onAccept, onDecline }) => (
+export const ProminentDisclosure = ({ isVisible, onAccept, onDecline }: { isVisible: boolean; onAccept: () => void; onDecline: () => void }) => (
   <Modal visible={isVisible} animationType="slide" transparent={false}>
     <View style={styles.mainContainer}>
       <ScrollView style={styles.container}>
@@ -55,6 +55,35 @@ export const ProminentDisclosure = ({ isVisible, onAccept, onDecline }) => (
     </View>
   </Modal>
 );
+
+const AvisoTexto = () => (
+  <ScrollView style={{ padding: 10 }}>
+    <Text style={styles.title}>AVISO DE PRIVACIDAD</Text>
+    <View style={styles.alertBox}>
+      <Text style={styles.alertText}>
+        IMPORTANTE: Bitácora 57 requiere acceso a su ubicación en todo momento.
+      </Text>
+    </View>
+    <Text style={styles.parrafo}>
+      Para cumplir con la NOM-087-SCT-2-2017, esta aplicación recopila datos de ubicación para permitir el rastreo de sus rutas, cálculo de jornadas y pausas de descanso.
+    </Text>
+    <Text style={styles.highlight}>
+      Estos datos se recopilan incluso cuando la aplicación está cerrada o no se está utilizando (ubicación en segundo plano).
+    </Text>
+    <Text style={styles.subtitle}>¿Por qué es necesario?</Text>
+    <Text style={styles.parrafo}>
+      • Garantizar que sus registros de manejo sean precisos para auditorías de la SCT.{"\n"}
+      • Generar reportes PDF con códigos QR verificables.{"\n"}
+      • Monitoreo de seguridad y logística de la flota.
+    </Text>
+    <Text style={styles.subtitle}>Uso de Datos Personales</Text>
+    <Text style={styles.parrafo}>
+      Además de la ubicación, recolectamos su nombre y número de licencia para personalizar sus reportes oficiales. Sus datos están protegidos y solo se comparten con su centro de monitoreo autorizado.
+    </Text>
+  </ScrollView>
+);
+
+export default AvisoTexto;
 
 const styles = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: COLORS.bg },

@@ -160,7 +160,7 @@ const enviarASupabase = async (item: ItemSync): Promise<void> => {
         .upsert(
           {
             id_local:          id_interno,
-            estado:            ['activo','pausado','finalizado','cancelado'].includes(estatus) ? estatus : 'activo',
+            estado:            ['activo','pausado','finalizado','cancelado'].includes(estatus as string) ? estatus as string : 'activo',
             inicio_jornada:    fecha_inicio ?? ahora,
             hash_sha256:       sello_digital ?? null,
             origen_nombre:     datos.origen   ?? null,
@@ -296,14 +296,14 @@ const enviarASupabase = async (item: ItemSync): Promise<void> => {
         'Retén / GN':    'retenimiento',
         'Otro':          'otro',
       };
-      const tipoNormalizado = tipoMap[tipo] ?? 'otro';
+      const tipoNormalizado = tipoMap[tipo as string] ?? 'otro';
 
       const { error } = await supabase
         .from('eventos_ruta')
         .insert({
           tipo:        tipoNormalizado,
-          lat:         ubicacion?.lat ?? 0,
-          lng:         ubicacion?.lng ?? 0,
+          lat:         (ubicacion as any)?.lat ?? 0,
+          lng:         (ubicacion as any)?.lng ?? 0,
           descripcion: descripcion
             ? `${descripcion}${direccion ? ` — ${direccion}` : ''}`
             : direccion ?? null,
