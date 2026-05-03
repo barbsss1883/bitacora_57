@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bitácora 57 — Registro Empresarial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://js.stripe.com/v3/"></script>
+<style>
+:root{
+  --asphalt:#060d16;--dark:#0b1622;--panel:#0f1e2e;--border:#1a2d42;--border2:#223448;
+  --amber:#f59e0b;--amber-dim:#d97706;--amber-pale:rgba(245,158,11,0.08);
+  --white:#f0f4f8;--muted:#5a7a94;--muted2:#3d5a72;
+  --danger:#ef4444;--danger-dim:rgba(239,68,68,0.12);
+  --success:#22c55e;--success-dim:rgba(34,197,94,0.10);
+  --font-display:'Bebas Neue',sans-serif;--font-ui:'Barlow Condensed',sans-serif;
+  --font-body:'Barlow',sans-serif;--font-mono:'Share Tech Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--asphalt);color:var(--white);font-family:var(--font-body);min-height:100vh;display:flex;flex-direction:column;}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:.5;}
+.header{padding:18px 40px;border-bottom:1px solid var(--border);background:var(--dark);display:flex;align-items:center;}
+.logo{font-family:var(--font-display);font-size:24px;letter-spacing:2px;color:var(--amber);}
+.logo span{color:var(--white);}
+.logo-sub{font-family:var(--font-ui);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);}
+.header-link{margin-left:auto;font-family:var(--font-ui);font-size:13px;color:var(--muted);text-decoration:none;border:1px solid var(--border2);padding:6px 14px;border-radius:5px;transition:all .2s;}
+.header-link:hover{color:var(--amber);border-color:var(--amber);}
+.page{flex:1;display:flex;background:radial-gradient(ellipse at 50% -10%,rgba(245,158,11,0.05) 0%,transparent 55%);}
+.left-col{flex:1;padding:50px 50px 50px 70px;display:flex;flex-direction:column;justify-content:center;max-width:500px;}
+.hero-label{font-family:var(--font-ui);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--amber);margin-bottom:10px;}
+.hero-title{font-family:var(--font-display);font-size:52px;letter-spacing:2px;line-height:1;color:var(--white);margin-bottom:6px;}
+.hero-title span{color:var(--amber);}
+.hero-sub{font-family:var(--font-body);font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:28px;max-width:360px;}
+.sh{height:2px;background:repeating-linear-gradient(90deg,var(--amber) 0,var(--amber) 18px,transparent 18px,transparent 36px);opacity:.4;width:180px;margin-bottom:28px;}
+.fl-list{display:flex;flex-direction:column;gap:10px;}
+.feat{display:flex;align-items:flex-start;gap:10px;}
+.feat-icon{width:26px;height:26px;border-radius:5px;background:var(--amber-pale);border:1px solid rgba(245,158,11,.2);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;margin-top:1px;}
+.feat-text{font-family:var(--font-ui);font-size:12px;color:var(--muted);line-height:1.5;}
+.feat-text strong{color:var(--white);}
+.right-col{width:500px;flex-shrink:0;padding:40px 50px 40px 30px;display:flex;align-items:flex-start;padding-top:40px;}
+.form-box{width:100%;background:var(--panel);border:1px solid var(--border2);border-radius:12px;overflow:hidden;}
+.steps-hdr{display:flex;background:var(--dark);border-bottom:1px solid var(--border);}
+.stab{flex:1;padding:13px 6px;text-align:center;font-family:var(--font-ui);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);position:relative;transition:color .2s;}
+.stab::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:transparent;transition:background .2s;}
+.stab.active{color:var(--amber);}.stab.active::after{background:var(--amber);}
+.stab.done{color:var(--success);}.stab.done::after{background:var(--success);}
+.snum{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;border:1px solid currentColor;font-size:9px;margin-right:4px;}
+.fbody{padding:26px;}
+.step{display:none;}.step.active{display:block;}
+.fl{font-family:var(--font-ui);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:block;}
+.fi{width:100%;background:var(--dark);border:1px solid var(--border2);border-radius:6px;padding:10px 12px;color:var(--white);font-family:var(--font-mono);font-size:13px;outline:none;margin-bottom:13px;transition:border-color .2s;}
+.fi:focus{border-color:var(--amber);}
+.fi-row{display:flex;gap:10px;}.fi-row .fw{flex:1;}
+.fi-sel{width:100%;background:var(--dark);border:1px solid var(--border2);border-radius:6px;padding:10px 12px;color:var(--white);font-family:var(--font-mono);font-size:13px;outline:none;margin-bottom:13px;cursor:pointer;}
+.plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
+.pc{border:1px solid var(--border2);border-radius:7px;padding:12px;cursor:pointer;transition:all .2s;position:relative;}
+.pc:hover{border-color:var(--muted2);}
+.pc.sel{border-color:var(--amber);background:var(--amber-pale);}
+.pc.full{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;}
+.pname{font-family:var(--font-display);font-size:15px;letter-spacing:1px;color:var(--white);}
+.pprice{font-family:var(--font-mono);font-size:12px;color:var(--amber);margin-top:2px;}
+.punits{font-family:var(--font-ui);font-size:10px;letter-spacing:1px;color:var(--muted);margin-top:3px;}
+.pcheck{position:absolute;top:8px;right:8px;font-size:13px;display:none;color:var(--amber);}
+.pc.sel .pcheck{display:block;}.pc.full .pcheck{position:static;margin-left:8px;}
+.sew{background:var(--dark);border:1px solid var(--border2);border-radius:6px;padding:11px 12px;margin-bottom:13px;transition:border-color .2s;}
+.sew.foc{border-color:var(--amber);}
+.res-box{background:var(--dark);border:1px solid var(--border2);border-radius:7px;padding:14px 16px;margin-bottom:16px;}
+.rrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.rl{font-family:var(--font-ui);font-size:11px;color:var(--muted);}
+.rv{font-family:var(--font-mono);font-size:12px;color:var(--white);}
+.rdiv{height:1px;background:var(--border);margin:8px 0;}
+.rtl{font-family:var(--font-ui);font-size:12px;font-weight:700;color:var(--white);}
+.rtv{font-family:var(--font-display);font-size:22px;color:var(--amber);}
+.nbtn{width:100%;padding:13px;background:var(--amber);color:#060d16;font-family:var(--font-display);font-size:18px;letter-spacing:2px;border:none;border-radius:6px;cursor:pointer;transition:all .2s;margin-top:4px;}
+.nbtn:hover{background:var(--amber-dim);}.nbtn:disabled{opacity:.5;cursor:not-allowed;}
+.bbtn{background:none;border:none;color:var(--muted);font-family:var(--font-ui);font-size:12px;cursor:pointer;padding:0;margin-bottom:14px;display:flex;align-items:center;gap:4px;transition:color .2s;}
+.bbtn:hover{color:var(--white);}
+.err{background:var(--danger-dim);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:9px 13px;font-family:var(--font-ui);font-size:12px;color:var(--danger);margin-bottom:12px;display:none;}
+.sec-badge{display:flex;align-items:center;justify-content:center;gap:5px;font-family:var(--font-ui);font-size:10px;letter-spacing:1px;color:var(--muted2);margin-top:10px;}
+.wa-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;background:#25d366;color:#fff;font-family:var(--font-display);font-size:16px;letter-spacing:1.5px;border:none;border-radius:6px;cursor:pointer;text-decoration:none;transition:opacity .2s;margin-top:4px;}
+.wa-btn:hover{opacity:.88;}
+.sv{display:none;text-align:center;padding:32px 20px;}
+.sv-icon{font-size:52px;margin-bottom:16px;}
+.sv-title{font-family:var(--font-display);font-size:30px;letter-spacing:2px;color:var(--success);margin-bottom:8px;}
+.sv-msg{font-family:var(--font-ui);font-size:13px;color:var(--muted);line-height:1.6;max-width:300px;margin:0 auto 20px;}
+.sv-note{background:var(--success-dim);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:12px;font-family:var(--font-mono);font-size:11px;color:var(--success);}
+@media(max-width:900px){.left-col{display:none;}.right-col{width:100%;padding:24px;}.page{justify-content:center;}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div><div class="logo">BITÁCORA <span>57</span></div><div class="logo-sub">Plataforma Empresarial</div></div>
+  <a href="/demo-dashboard.html" class="header-link">Ya tengo cuenta →</a>
+</div>
+<div class="page">
+  <div class="left-col">
+    <div class="hero-label">Plataforma SaaS para Flotas</div>
+    <div class="hero-title">CONTROL<br>TOTAL DE<br>TU <span>FLOTA</span></div>
+    <div class="hero-sub">Cumplimiento NOM-068 y NOM-087 automatizado. Bitácoras con sello SHA-256. Dashboard en tiempo real.</div>
+    <div class="sh"></div>
+    <div class="fl-list">
+      <div class="feat"><div class="feat-icon">📋</div><div class="feat-text"><strong>Bitácoras PDF con SHA-256</strong> — Válidas ante la Guardia Nacional.</div></div>
+      <div class="feat"><div class="feat-icon">⏱</div><div class="feat-text"><strong>ELD NOM-087 automatizado</strong> — Alertas antes de exceder límites.</div></div>
+      <div class="feat"><div class="feat-icon">📡</div><div class="feat-text"><strong>Dashboard de flota en vivo</strong> — Estado de operadores en tiempo real.</div></div>
+      <div class="feat"><div class="feat-icon">🔍</div><div class="feat-text"><strong>Inspecciones NOM-068</strong> — Checklist pre-viaje con firma digital.</div></div>
+    </div>
+  </div>
+  <div class="right-col">
+    <div class="form-box">
+      <div class="steps-hdr" id="shdr">
+        <div class="stab active" id="t1"><span class="snum">1</span>Empresa</div>
+        <div class="stab" id="t2"><span class="snum">2</span>Plan</div>
+        <div class="stab" id="t3"><span class="snum">3</span>Pago</div>
+      </div>
+      <div class="fbody">
+        <div class="err" id="err"></div>
+
+        <!-- STEP 1 -->
+        <div class="step active" id="s1">
+          <div style="font-family:var(--font-display);font-size:22px;letter-spacing:2px;margin-bottom:2px;">TU EMPRESA</div>
+          <div style="font-family:var(--font-ui);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:18px;">Datos de registro</div>
+          <label class="fl">Razón Social / Nombre</label>
+          <input class="fi" id="fe" type="text" placeholder="Transportes Norteña S.A."/>
+          <div class="fi-row">
+            <div class="fw"><label class="fl">Responsable</label><input class="fi" id="fn" type="text" placeholder="Juan López"/></div>
+            <div class="fw"><label class="fl">Teléfono</label><input class="fi" id="ft" type="tel" placeholder="81 1234 5678"/></div>
+          </div>
+          <label class="fl">Correo (será tu usuario)</label>
+          <input class="fi" id="fem" type="email" placeholder="admin@tuempresa.com"/>
+          <label class="fl">¿Cuántas unidades?</label>
+          <select class="fi-sel" id="fu">
+            <option value="">Selecciona...</option>
+            <option value="1-5">1 – 5 unidades</option>
+            <option value="6-15">6 – 15 unidades</option>
+            <option value="16-50">16 – 50 unidades</option>
+            <option value="50+">Más de 50 unidades</option>
+          </select>
+          <button class="nbtn" onclick="go2()">SIGUIENTE →</button>
+        </div>
+
+        <!-- STEP 2 -->
+        <div class="step" id="s2">
+          <button class="bbtn" onclick="goS(1)">← Regresar</button>
+          <div style="font-family:var(--font-display);font-size:22px;letter-spacing:2px;margin-bottom:2px;">ELIGE TU PLAN</div>
+          <div style="font-family:var(--font-ui);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:18px;">Suscripción mensual · IVA incluido</div>
+          <div class="plan-grid">
+            <div class="pc sel" id="pc-basico" onclick="selPlan('basico')"><span class="pcheck">✓</span><div class="pname">BÁSICO</div><div class="pprice">$499 MXN/mes</div><div class="punits">Hasta 10 unidades</div></div>
+            <div class="pc" id="pc-pro" onclick="selPlan('pro')"><span class="pcheck">✓</span><div class="pname">PRO</div><div class="pprice">$999 MXN/mes</div><div class="punits">Hasta 30 unidades</div></div>
+            <div class="pc" id="pc-empresa" onclick="selPlan('empresa')"><span class="pcheck">✓</span><div class="pname">EMPRESA</div><div class="pprice">$1,799 MXN/mes</div><div class="punits">Hasta 100 unidades</div></div>
+            <div class="pc full" id="pc-flotilla" onclick="selPlan('flotilla')"><div><div class="pname">FLOTILLA</div><div class="punits">+100 unidades · Precio negociado</div></div><span class="pcheck">✓</span></div>
+          </div>
+          <button class="nbtn" onclick="go3()">CONTINUAR →</button>
+        </div>
+
+        <!-- STEP 3 STRIPE -->
+        <div class="step" id="s3s">
+          <button class="bbtn" onclick="goS(2)">← Regresar</button>
+          <div style="font-family:var(--font-display);font-size:22px;letter-spacing:2px;margin-bottom:2px;">DATOS DE PAGO</div>
+          <div style="font-family:var(--font-ui);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Pago seguro con Stripe</div>
+          <div class="res-box">
+            <div class="rrow"><span class="rl">Plan</span><span class="rv" id="rp">—</span></div>
+            <div class="rrow"><span class="rl">Empresa</span><span class="rv" id="re">—</span></div>
+            <div class="rdiv"></div>
+            <div class="rrow"><span class="rtl">Total mensual</span><span class="rtv" id="rt">—</span></div>
+          </div>
+          <label class="fl">Nombre en la tarjeta</label>
+          <input class="fi" id="cn" type="text" placeholder="JUAN LOPEZ"/>
+          <label class="fl">Número de tarjeta</label>
+          <div class="sew" id="cnw"><div id="cne"></div></div>
+          <div class="fi-row">
+            <div class="fw"><label class="fl">Vencimiento</label><div class="sew" id="cew"><div id="cee"></div></div></div>
+            <div class="fw"><label class="fl">CVC</label><div class="sew" id="cvw"><div id="cve"></div></div></div>
+          </div>
+          <div id="perr" style="color:var(--danger);font-family:var(--font-ui);font-size:12px;margin-bottom:10px;display:none;"></div>
+          <button class="nbtn" id="pbtn" onclick="doPago()"><span id="pbtxt">PAGAR Y ACTIVAR</span></button>
+          <div class="sec-badge">🔒 Pago seguro · SSL · Stripe</div>
+        </div>
+
+        <!-- STEP 3 FLOTILLA -->
+        <div class="step" id="s3f">
+          <button class="bbtn" onclick="goS(2)">← Regresar</button>
+          <div style="font-family:var(--font-display);font-size:22px;letter-spacing:2px;margin-bottom:2px;">PLAN FLOTILLA</div>
+          <div style="font-family:var(--font-ui);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Precio personalizado</div>
+          <div style="background:var(--dark);border:1px solid var(--border2);border-radius:7px;padding:16px;margin-bottom:20px;font-family:var(--font-ui);font-size:13px;color:var(--muted);line-height:1.6;">
+            Para flotas de <strong style="color:var(--white)">más de 100 unidades</strong> ofrecemos precio negociado, integración personalizada y capacitación a operadores.
+          </div>
+          <a class="wa-btn" id="walink" href="#" target="_blank">💬 CONTACTAR POR WHATSAPP</a>
+          <div style="text-align:center;margin-top:10px;font-family:var(--font-ui);font-size:10px;color:var(--muted2);">ventas@bitacora57.com</div>
+        </div>
+      </div>
+
+      <!-- SUCCESS -->
+      <div class="sv" id="sv">
+        <div class="sv-icon">🚛</div>
+        <div class="sv-title">¡PAGO EXITOSO!</div>
+        <div class="sv-msg">Tu suscripción está activa. En minutos recibirás un correo con tus credenciales de acceso.</div>
+        <div class="sv-note">📧 Revisa tu bandeja de entrada<br/><span style="color:var(--muted);font-size:10px;">Incluye spam / promociones</span></div>
+        <div style="margin-top:20px;"><a href="/demo-dashboard.html" style="font-family:var(--font-ui);font-size:13px;color:var(--amber);text-decoration:none;">Ir al panel →</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SB_URL='https://sbpyojhuihdpzxgrgmid.supabase.co';
+const SB_KEY='sb_publishable_1Us4K-L7oNn7YeMtXCihpA_Ej1a9eQg';
+const STRIPE_PK='pk_test_51TSl4xGZpCwvbd04LjPbomS4S89CLUT2YuiVAc25lJYy9IkP4bb7XxYcfmsx3oOr446b3u6ExDOP8hB12auwN5jk00ZbBh6cQW';
+const FN_URL='https://us-central1-device-streaming-61499c4a.cloudfunctions.net';
+
+const PLANES={
+  basico: {priceId:'price_1TSlO0KFJQ0hIbWh6uNWSblT',nombre:'Básico',precio:'$499 MXN',tag:'BÁSICO'},
+  pro:    {priceId:'price_1TSlQQKFJQ0hIbWhDwnOrAji',nombre:'Pro',precio:'$999 MXN',tag:'PRO'},
+  empresa:{priceId:'price_1TSlRcKFJQ0hIbWhHAH5hX0r',nombre:'Empresa',precio:'$1,799 MXN',tag:'EMPRESA'},
+};
+
+const {createClient}=supabase;
+const sb=createClient(SB_URL,SB_KEY);
+const strp=Stripe(STRIPE_PK);
+let plan='basico', empId=null, sEl=null, cNum=null, cExp=null, cCvc=null;
+
+function showErr(m){const e=document.getElementById('err');e.textContent=m;e.style.display=m?'block':'none';}
+
+function goS(n){
+  ['s1','s2','s3s','s3f'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  [1,2,3].forEach(i=>{
+    const t=document.getElementById('t'+i);
+    t.classList.remove('active','done');
+    if(i<n) t.classList.add('done');
+    else if(i===n) t.classList.add('active');
+  });
+  if(n===1) document.getElementById('s1').classList.add('active');
+  if(n===2) document.getElementById('s2').classList.add('active');
+  showErr('');
+}
+
+function selPlan(p){
+  plan=p;
+  ['basico','pro','empresa','flotilla'].forEach(x=>document.getElementById('pc-'+x).classList.toggle('sel',x===p));
+}
+
+function go2(){
+  const e=document.getElementById('fe').value.trim();
+  const n=document.getElementById('fn').value.trim();
+  const em=document.getElementById('fem').value.trim();
+  const u=document.getElementById('fu').value;
+  if(!e||!n||!em||!u){showErr('Completa todos los campos.');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){showErr('Correo inválido.');return;}
+  goS(2);
+}
+
+async function go3(){
+  if(plan==='flotilla'){
+    const e=document.getElementById('fe').value.trim();
+    const n=document.getElementById('fn').value.trim();
+    const t=document.getElementById('ft').value.trim();
+    const em=document.getElementById('fem').value.trim().toLowerCase();
+    const u=document.getElementById('fu').value;
+    const msg=encodeURIComponent(`Hola, soy ${n} de ${e}. Me interesa el Plan Flotilla de Bitácora 57. Flota: ${u}. Tel: ${t}`);
+    document.getElementById('walink').href=`https://wa.me/5218112345678?text=${msg}`;
+    await sb.from('empresas').upsert({nombre:e,email:em,activa:false,plan:'flotilla',metadata:{nombre_responsable:n,telefono:t,unidades_flota:u}},{onConflict:'email'});
+    goS(3);document.getElementById('s3f').classList.add('active');
+    return;
+  }
+
+  const em=document.getElementById('fem').value.trim().toLowerCase();
+  const e=document.getElementById('fe').value.trim();
+  const n=document.getElementById('fn').value.trim();
+  const t=document.getElementById('ft').value.trim();
+  const u=document.getElementById('fu').value;
+  const p=PLANES[plan];
+
+  document.getElementById('rp').textContent=`Bitácora 57 ${p.nombre}`;
+  document.getElementById('re').textContent=e;
+  document.getElementById('rt').textContent=p.precio+'/mes';
+
+  // Guardar empresa en Supabase
+  const {data:ex}=await sb.from('empresas').select('id').eq('email',em).maybeSingle();
+  if(ex){empId=ex.id;}
+  else{
+    const{data:nv,error}=await sb.from('empresas').insert({nombre:e,email:em,activa:false,plan,metadata:{nombre_responsable:n,telefono:t,unidades_flota:u}}).select().single();
+    if(error){showErr('Error: '+error.message);return;}
+    empId=nv.id;
+  }
+
+  goS(3);document.getElementById('s3s').classList.add('active');
+  if(!sEl) initStripe();
+}
+
+function initStripe(){
+  sEl=strp.elements({
+    appearance:{
+      theme:'night',
+      variables:{colorPrimary:'#f59e0b',colorBackground:'#0b1622',colorText:'#f0f4f8',colorDanger:'#ef4444',fontFamily:'"Share Tech Mono",monospace',borderRadius:'5px'},
+      rules:{'.Input':{border:'1px solid #223448',padding:'10px 12px'},'.Input:focus':{border:'1px solid #f59e0b',boxShadow:'none'}}
+    }
+  });
+  cNum=sEl.create('cardNumber');cExp=sEl.create('cardExpiry');cCvc=sEl.create('cardCvc');
+  cNum.mount('#cne');cExp.mount('#cee');cCvc.mount('#cve');
+  [[cNum,'cnw'],[cExp,'cew'],[cCvc,'cvw']].forEach(([el,id])=>{
+    el.on('focus',()=>document.getElementById(id).classList.add('foc'));
+    el.on('blur',()=>document.getElementById(id).classList.remove('foc'));
+  });
+}
+
+async function doPago(){
+  const btn=document.getElementById('pbtn');
+  const btxt=document.getElementById('pbtxt');
+  const perr=document.getElementById('perr');
+  const em=document.getElementById('fem').value.trim().toLowerCase();
+  const empresa=document.getElementById('fe').value.trim();
+  const nombre=document.getElementById('cn').value.trim();
+  const p=PLANES[plan];
+
+  if(!nombre){perr.textContent='Ingresa el nombre en la tarjeta.';perr.style.display='block';return;}
+  btn.disabled=true;btxt.textContent='PROCESANDO...';perr.style.display='none';
+
+  try{
+    // Llamar Firebase Function para crear PaymentIntent
+    const r=await fetch(`${FN_URL}/crearPaymentIntent`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({priceId:p.priceId,empresaId:empId,email:em,empresaNombre:empresa})
+    });
+    const{clientSecret,error:fe}=await r.json();
+    if(fe) throw new Error(fe);
+
+    // Confirmar pago
+    const{error:se}=await strp.confirmCardPayment(clientSecret,{
+      payment_method:{card:cNum,billing_details:{name:nombre,email:em}}
+    });
+    if(se) throw new Error(se.message);
+
+    // Éxito
+    document.getElementById('shdr').style.display='none';
+    document.querySelector('.fbody').style.display='none';
+    document.getElementById('sv').style.display='block';
+
+  }catch(ex){
+    perr.textContent=ex.message||'Error al procesar. Intenta de nuevo.';
+    perr.style.display='block';
+    btn.disabled=false;btxt.textContent='PAGAR Y ACTIVAR';
+  }
+}
+</script>
+</body>
+</html>

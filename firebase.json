@@ -51,6 +51,10 @@
         "destination": "/admin.html"
       },
       {
+        "source": "/demo-dashboard",
+        "destination": "/demo-dashboard.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
