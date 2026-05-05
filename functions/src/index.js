@@ -329,7 +329,7 @@ exports.portalCliente = functions.https.onRequest(async (req, res) => {
 // ══════════════════════════════════════════════
 // 4. ACTIVAR EMPRESA MANUAL (Admin Panel)
 // ══════════════════════════════════════════════
-const ADMIN_EMAIL = "luisg0418@gmail.com";
+const ADMIN_EMAIL = "luiseguzman1883@gmail.com";
 
 exports.activarEmpresaAdmin = functions.https.onRequest(async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");

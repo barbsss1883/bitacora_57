@@ -26,38 +26,14 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      {
-        "source": "/eliminar-cuenta",
-        "destination": "/eliminar-cuenta.html"
-      },
-      {
-        "source": "/eliminar-cuenta.html",
-        "destination": "/eliminar-cuenta.html"
-      },
-      {
-        "source": "/validar",
-        "destination": "/validar.html"
-      },
-      {
-        "source": "/validar.html",
-        "destination": "/validar.html"
-      },
-      {
-        "source": "/monitor.html",
-        "destination": "/monitor.html"
-      },
-      {
-        "source": "/admin.html",
-        "destination": "/admin.html"
-      },
-      {
-        "source": "/demo-dashboard",
-        "destination": "/demo-dashboard.html"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "/admin",              "destination": "/admin-panel.html" },
+      { "source": "/registro",           "destination": "/registro-empresa.html" },
+      { "source": "/dashboard",          "destination": "/demo-dashboard.html" },
+      { "source": "/demo-dashboard",     "destination": "/demo-dashboard.html" },
+      { "source": "/aviso-privacidad",   "destination": "/aviso-privacidad.html" },
+      { "source": "/eliminar-cuenta",    "destination": "/eliminar-cuenta.html" },
+      { "source": "/validar",            "destination": "/validar.html" },
+      { "source": "**",                  "destination": "/index.html" }
     ]
   },
   "storage": {
