@@ -23,9 +23,9 @@ function getSb() {
 
 // ── Mapeo Price ID → Plan ──
 const PRICE_PLAN_MAP = {
-  "price_1TSlO0KFJQ0hIbWh6uNWSblT": { plan: "basico",     nombre: "Básico",    unidades: 10  },
-  "price_1TSlQQKFJQ0hIbWhDwnOrAji": { plan: "profesional", nombre: "Pro",       unidades: 30  },
-  "price_1TSlRcKFJQ0hIbWhHAH5hX0r": { plan: "empresarial", nombre: "Empresa",   unidades: 100 },
+  "price_1TSlO0KFJQ0hIbWh6uNWSblT": { plan: "basico",      nombre: "Básico",  unidades: 10  },
+  "price_1TSlQQKFJQ0hIbWhDwnOrAji": { plan: "profesional", nombre: "Pro",     unidades: 30  },
+  "price_1TSlRcKFJQ0hIbWhHAH5hX0r": { plan: "empresarial", nombre: "Empresa", unidades: 100 },
 };
 
 // ── Generar password temporal ──
@@ -322,6 +322,77 @@ exports.portalCliente = functions.https.onRequest(async (req, res) => {
     });
     res.json({ url: session.url });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════
+// 4. ACTIVAR EMPRESA MANUAL (Admin Panel)
+// ══════════════════════════════════════════════
+const ADMIN_EMAIL = "luisg0418@gmail.com";
+
+exports.activarEmpresaAdmin = functions.https.onRequest(async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+
+  try {
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
+    if (!token) { res.status(401).json({ error: "No autorizado." }); return; }
+
+    const { data: { user }, error: verErr } = await getSb().auth.getUser(token);
+    if (verErr || user?.email !== ADMIN_EMAIL) {
+      res.status(403).json({ error: "Acceso denegado." }); return;
+    }
+
+    const { empresaId, password } = req.body;
+    if (!empresaId || !password || password.length < 8) {
+      res.status(400).json({ error: "Password mínimo 8 caracteres." }); return;
+    }
+
+    const { data: emp, error: empErr } = await getSb()
+      .from("empresas").select("*").eq("id", empresaId).single();
+    if (empErr || !emp) { res.status(404).json({ error: "Empresa no encontrada." }); return; }
+
+    let authId = emp.auth_id || null;
+    const { data: authData, error: createErr } = await getSb().auth.admin.createUser({
+      email: emp.email, password, email_confirm: true,
+    });
+
+    if (!createErr) {
+      authId = authData.user.id;
+    } else if (createErr.message?.includes("already")) {
+      const { data: { users } } = await getSb().auth.admin.listUsers({ perPage: 1000 });
+      const found = users?.find(u => u.email === emp.email);
+      if (found) {
+        authId = found.id;
+        await getSb().auth.admin.updateUserById(found.id, { password });
+      }
+    } else {
+      throw createErr;
+    }
+
+    await getSb().from("empresas").update({
+      activa: true,
+      activada_at: new Date().toISOString(),
+      auth_id: authId,
+    }).eq("id", empresaId);
+
+    if (authId) {
+      await getSb().from("empresa_usuarios").upsert({
+        empresa_id: empresaId, auth_id: authId, email: emp.email,
+        nombre: emp.metadata?.nombre_responsable || emp.nombre,
+        rol: "admin", activo: true,
+      }, { onConflict: "email,empresa_id" });
+    }
+
+    const PLAN_NAMES = { basico: "Básico", profesional: "Pro", empresarial: "Empresa" };
+    await sendWelcomeEmail(emp.email, emp.nombre, password, PLAN_NAMES[emp.plan] || "Básico");
+
+    res.json({ success: true, authId });
+  } catch (e) {
+    console.error("activarEmpresaAdmin error:", e);
     res.status(500).json({ error: e.message });
   }
 });
