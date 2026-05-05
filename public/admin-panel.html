@@ -399,7 +399,7 @@ async function doLogin(){
   btn.disabled=true; btn.textContent='Redirigiendo...';
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.href }
+    options: { redirectTo: 'https://bitacora57.com/admin' }
   });
   if(error){ showLoginErr(error.message); btn.disabled=false; }
 }
