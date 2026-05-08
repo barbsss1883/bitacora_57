@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bitácora 57 — Dónde estoy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --asphalt: #060d16;
+  --dark:    #0b1622;
+  --panel:   #0f1e2e;
+  --border:  #1a2d42;
+  --amber:   #f59e0b;
+  --amber-glow: #fbbf24;
+  --white:   #f0f4f8;
+  --muted:   #6b8299;
+  --green:   #22c55e;
+  --yellow:  #eab308;
+  --red:     #ef4444;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-ui: 'Barlow Condensed', sans-serif;
+  --font-body: 'Barlow', sans-serif;
+}
+
+/* ── LOGIN SCREEN ── */
+#login-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+.login-box {
+  width: 100%;
+  max-width: 360px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 36px 28px;
+}
+.login-logo {
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 2px;
+  color: var(--amber);
+  margin-bottom: 2px;
+}
+.login-logo span { color: var(--white); }
+.login-sub {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 28px;
+  display: block;
+}
+.fl {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 5px;
+  display: block;
+}
+.fi {
+  width: 100%;
+  background: var(--dark);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 11px 14px;
+  color: var(--white);
+  font-family: var(--font-body);
+  font-size: 15px;
+  outline: none;
+  margin-bottom: 14px;
+  transition: border-color .2s;
+}
+.fi:focus { border-color: var(--amber); }
+.login-btn {
+  width: 100%;
+  background: var(--amber);
+  color: var(--asphalt);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 5px;
+  padding: 13px;
+  cursor: pointer;
+  transition: background .2s, opacity .2s;
+  margin-top: 4px;
+}
+.login-btn:hover   { background: var(--amber-glow); }
+.login-btn:disabled { opacity: .5; cursor: not-allowed; }
+.login-err {
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.3);
+  border-radius: 5px;
+  padding: 9px 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--red);
+  margin-bottom: 12px;
+  display: none;
+}
+#app-screen { display: none; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--asphalt);
+  color: var(--white);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  padding-bottom: 40px;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: .5;
+}
+
+/* ── HEADER ── */
+header {
+  background: var(--dark);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo { font-family: var(--font-display); font-size: 22px; letter-spacing: 2px; color: var(--white); }
+.logo span { color: var(--amber); }
+.logo-sub { font-family: var(--font-ui); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); display: block; margin-top: -2px; }
+.refresh-btn {
+  font-family: var(--font-ui); font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  padding: 7px 14px; border-radius: 4px; cursor: pointer; transition: all .2s;
+}
+.refresh-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+/* ── MAIN ── */
+.container { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+
+/* ── STATUS HERO ── */
+.status-hero {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 28px 24px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.status-dot {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+.status-dot.activo  { background: rgba(34,197,94,.15);  border: 2px solid var(--green);  animation: pulse-dot 2s infinite; }
+.status-dot.pausado { background: rgba(234,179,8,.15);  border: 2px solid var(--yellow); }
+.status-dot.offline { background: rgba(107,130,153,.1); border: 2px solid var(--border); }
+@keyframes pulse-dot {
+  0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,.4); }
+  50%      { box-shadow: 0 0 0 10px rgba(34,197,94,0); }
+}
+.status-text-wrap {}
+.status-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.status-value {
+  font-family: var(--font-display);
+  font-size: 38px;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+.status-value.activo  { color: var(--green); }
+.status-value.pausado { color: var(--yellow); }
+.status-value.offline { color: var(--muted); }
+.status-since {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ── TRIP CARD ── */
+.trip-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+.trip-card-title {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.route-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.route-city {
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: 1px;
+  color: var(--white);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.route-arrow {
+  font-family: var(--font-ui);
+  font-size: 18px;
+  color: var(--amber);
+  flex-shrink: 0;
+}
+.trip-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.meta-item {}
+.meta-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.meta-value {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--white);
+}
+
+/* ── TIMER ── */
+.timer-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.timer-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.timer-value {
+  font-family: var(--font-display);
+  font-size: 48px;
+  color: var(--amber);
+  letter-spacing: 2px;
+  line-height: 1;
+}
+.timer-note { font-family: var(--font-ui); font-size: 12px; color: var(--muted); margin-top: 4px; }
+.km-block { text-align: right; }
+.km-value { font-family: var(--font-display); font-size: 40px; color: var(--white); line-height: 1; }
+.km-unit  { font-family: var(--font-ui); font-size: 12px; color: var(--muted); }
+
+/* ── MAP ── */
+.map-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.map-header {
+  padding: 12px 20px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+#map { height: 280px; width: 100%; }
+.map-no-data {
+  height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.map-no-data .icon { font-size: 32px; opacity: .4; }
+
+/* ── HISTORY ── */
+.section-title {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.history-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.history-item {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.history-route {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-date { font-family: var(--font-ui); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.history-pill {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+.history-pill.finalizado { background: rgba(34,197,94,.1);  color: var(--green);  border: 1px solid rgba(34,197,94,.3); }
+.history-pill.cancelado  { background: rgba(239,68,68,.1);  color: var(--red);    border: 1px solid rgba(239,68,68,.3); }
+.history-pill.activo     { background: rgba(34,197,94,.1);  color: var(--green);  border: 1px solid rgba(34,197,94,.3); }
+.history-pill.pausado    { background: rgba(234,179,8,.1);  color: var(--yellow); border: 1px solid rgba(234,179,8,.3); }
+
+/* ── FOOTER ── */
+.footer-bar {
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  padding-top: 8px;
+}
+#last-updated { color: var(--amber); }
+
+/* ── LOADING / EMPTY ── */
+.loading-state, .empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.header-actions { display: flex; gap: 8px; }
+.refresh-btn-danger { border-color: var(--red); color: var(--red); }
+.refresh-btn-danger:hover { border-color: var(--red); color: var(--red); background: rgba(239,68,68,.08); }
+
+/* ── MOBILE ── */
+@media (max-width: 480px) {
+  .timer-value { font-size: 38px; }
+  .km-value    { font-size: 32px; }
+  .route-city  { font-size: 22px; }
+  .status-value { font-size: 30px; }
+  header { padding: 12px 16px; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">BITÁCORA <span>57</span></div>
+    <span class="login-sub">Acceso familiar</span>
+    <div class="login-err" id="login-err"></div>
+    <label class="fl">Correo</label>
+    <input class="fi" id="l-email" type="email" placeholder="correo@ejemplo.com" autocomplete="email"/>
+    <label class="fl">Contraseña</label>
+    <input class="fi" id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+    <button type="button" class="login-btn" id="login-btn" onclick="hacerLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+<header>
+  <div>
+    <div class="logo">BITÁCORA <span>57</span></div>
+    <span class="logo-sub">Dónde estoy ahora</span>
+  </div>
+  <div class="header-actions">
+    <button type="button" class="refresh-btn" onclick="cargar()">↻ Actualizar</button>
+    <button type="button" class="refresh-btn refresh-btn-danger" onclick="cerrarSesion()">Salir</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- STATUS -->
+  <div id="status-hero" class="status-hero">
+    <div class="status-dot offline">🚛</div>
+    <div class="status-text-wrap">
+      <div class="status-label">Estado actual</div>
+      <div class="status-value offline" id="status-text">Cargando…</div>
+      <div class="status-since" id="status-since"></div>
+    </div>
+  </div>
+
+  <!-- CONTENIDO DINÁMICO -->
+  <div id="main-content">
+    <div class="loading-state">
+      <div class="spinner"></div>
+      Conectando con Bitácora 57…
+    </div>
+  </div>
+
+  <!-- HISTORIAL -->
+  <div id="history-section" style="display:none;">
+    <div class="section-title">Últimas jornadas</div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+
+  <div class="footer-bar">
+    Última actualización: <span id="last-updated">—</span>
+    &nbsp;·&nbsp; Se actualiza cada 60 s
+  </div>
+
+</div>
+
+<script>
+const SB_URL = 'https://sbpyojhuihdpzxgrgmid.supabase.co';
+const SB_KEY = 'sb_publishable_1Us4K-L7oNn7YeMtXCihpA_Ej1a9eQg';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+const params   = new URLSearchParams(location.search);
+const opFiltro = params.get('op') || null;
+
+let timerInterval  = null;
+let mapInstance    = null;
+let autoRefresh    = null;
+
+/* ── AUTH ── */
+async function hacerLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const pass  = document.getElementById('l-pass').value;
+  const btn   = document.getElementById('login-btn');
+  const err   = document.getElementById('login-err');
+
+  err.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Entrando…';
+
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+
+  if (error) {
+    err.textContent = 'Correo o contraseña incorrectos.';
+    err.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    return;
+  }
+
+  mostrarApp();
+}
+
+async function cerrarSesion() {
+  clearInterval(autoRefresh);
+  clearInterval(timerInterval);
+  await sb.auth.signOut();
+  document.getElementById('app-screen').style.display  = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('l-pass').value = '';
+}
+
+function mostrarApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display   = 'block';
+  cargar();
+  autoRefresh = setInterval(cargar, 60_000);
+}
+
+/* Al cargar: restaurar sesión existente */
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    mostrarApp();
+  }
+})();
+
+/* Enter en el formulario */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') {
+    hacerLogin();
+  }
+});
+
+/* ── TIEMPO TRANSCURRIDO ── */
+function tiempoTranscurrido(isoFecha) {
+  const diff = Math.floor((Date.now() - new Date(isoFecha)) / 1000);
+  const h = Math.floor(diff / 3600);
+  const m = Math.floor((diff % 3600) / 60);
+  const s = diff % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+/* ── FECHA LEGIBLE ── */
+function fechaCorta(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('es-MX', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+/* ── RENDERIZAR ESTADO ── */
+function renderEstado(viaje) {
+  const hero   = document.getElementById('status-hero');
+  const dot    = hero.querySelector('.status-dot');
+  const text   = document.getElementById('status-text');
+  const since  = document.getElementById('status-since');
+
+  dot.className  = `status-dot ${viaje.estado}`;
+  text.className = `status-value ${viaje.estado}`;
+
+  const labels = { activo:'En Ruta', pausado:'En Pausa', finalizado:'Finalizado', cancelado:'Cancelado' };
+  text.textContent = labels[viaje.estado] || viaje.estado;
+
+  const op = viaje.metadata?.operador || 'Operador';
+  since.textContent = `${op} · Desde ${fechaCorta(viaje.inicio_jornada)}`;
+}
+
+/* ── RENDERIZAR TARJETA DE VIAJE ── */
+function renderViaje(viaje) {
+  const origen  = viaje.origen_nombre  || '—';
+  const destino = viaje.destino_nombre || '—';
+  const meta    = viaje.metadata || {};
+
+  const html = `
+    <div class="trip-card">
+      <div class="trip-card-title">Viaje actual</div>
+      <div class="route-row">
+        <div class="route-city" title="${origen}">${origen}</div>
+        <div class="route-arrow">→</div>
+        <div class="route-city" title="${destino}">${destino}</div>
+      </div>
+      <div class="trip-meta">
+        <div class="meta-item">
+          <div class="meta-label">Operador</div>
+          <div class="meta-value">${meta.operador || '—'}</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Unidad</div>
+          <div class="meta-value">${meta.unidad || '—'}</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Placas</div>
+          <div class="meta-value">${meta.placas || '—'}</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Carga</div>
+          <div class="meta-value">${viaje.carga_descripcion || meta.modalidad || '—'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="timer-card">
+      <div>
+        <div class="timer-label">Tiempo en ruta</div>
+        <div class="timer-value" id="live-timer">${tiempoTranscurrido(viaje.inicio_jornada)}</div>
+        <div class="timer-note">desde ${fechaCorta(viaje.inicio_jornada)}</div>
+      </div>
+      ${viaje.km_fin ? `
+      <div class="km-block">
+        <div class="km-value">${Math.round(viaje.km_fin)}</div>
+        <div class="km-unit">km recorridos</div>
+      </div>` : ''}
+    </div>
+  `;
+
+  document.getElementById('main-content').innerHTML = html;
+
+  clearInterval(timerInterval);
+  if (viaje.estado === 'activo') {
+    timerInterval = setInterval(() => {
+      const el = document.getElementById('live-timer');
+      if (el) el.textContent = tiempoTranscurrido(viaje.inicio_jornada);
+    }, 1000);
+  }
+}
+
+/* ── RENDERIZAR MAPA ── */
+function renderMapa(rutas) {
+  const card = document.getElementById('map-card');
+  if (!card) return;
+
+  if (!rutas || rutas.length === 0) {
+    card.querySelector('#map').style.display = 'none';
+    const noData = document.createElement('div');
+    noData.className = 'map-no-data';
+    noData.innerHTML = '<span class="icon">📍</span>Mapa disponible al finalizar la jornada';
+    card.appendChild(noData);
+    return;
+  }
+
+  // Buscar la ruta más reciente con coordenadas
+  let coords = null;
+  for (const r of rutas) {
+    const geom = r.datos_viaje?.geometry;
+    if (geom?.coordinates?.length > 0) {
+      coords = geom.coordinates; // [[lng,lat], ...]
+      break;
+    }
+  }
+
+  if (!coords || coords.length === 0) {
+    card.querySelector('#map').style.display = 'none';
+    const noData = document.createElement('div');
+    noData.className = 'map-no-data';
+    noData.innerHTML = '<span class="icon">📍</span>Ruta no disponible aún';
+    card.appendChild(noData);
+    return;
+  }
+
+  // Leaflet espera [lat, lng]
+  const latLngs = coords.map(c => [c[1], c[0]]);
+
+  if (mapInstance) { mapInstance.remove(); }
+  mapInstance = L.map('map', { zoomControl: true, scrollWheelZoom: false });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO',
+    maxZoom: 18,
+  }).addTo(mapInstance);
+
+  const polyline = L.polyline(latLngs, { color: '#f59e0b', weight: 3, opacity: .9 }).addTo(mapInstance);
+
+  // Pin inicio
+  const iconStart = L.divIcon({ className: '', html: '<div style="background:#22c55e;width:12px;height:12px;border-radius:50%;border:2px solid #fff;"></div>', iconSize:[12,12] });
+  L.marker(latLngs[0], { icon: iconStart }).addTo(mapInstance).bindPopup('Inicio');
+
+  // Pin fin
+  const iconEnd = L.divIcon({ className: '', html: '<div style="background:#f59e0b;width:12px;height:12px;border-radius:50%;border:2px solid #fff;"></div>', iconSize:[12,12] });
+  L.marker(latLngs[latLngs.length - 1], { icon: iconEnd }).addTo(mapInstance).bindPopup('Última posición');
+
+  mapInstance.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+}
+
+/* ── RENDERIZAR HISTORIAL ── */
+function renderHistorial(viajes) {
+  const section = document.getElementById('history-section');
+  const list    = document.getElementById('history-list');
+
+  if (!viajes || viajes.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  list.innerHTML = viajes.map(v => {
+    const origen  = v.origen_nombre  || '—';
+    const destino = v.destino_nombre || '—';
+    const label   = { finalizado:'Completado', cancelado:'Cancelado', activo:'En curso', pausado:'En pausa' };
+    return `
+      <div class="history-item">
+        <div>
+          <div class="history-route">${origen} → ${destino}</div>
+          <div class="history-date">${fechaCorta(v.inicio_jornada)}</div>
+        </div>
+        <span class="history-pill ${v.estado}">${label[v.estado] || v.estado}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ── CARGA PRINCIPAL ── */
+async function cargar() {
+  document.getElementById('last-updated').textContent = '…';
+
+  // 1. Obtener viaje activo/pausado más reciente
+  let query = sb.from('viajes')
+    .select('*')
+    .in('estado', ['activo','pausado'])
+    .order('inicio_jornada', { ascending: false })
+    .limit(1);
+
+  if (opFiltro) {
+    query = query.ilike('metadata->>operador', `%${opFiltro}%`);
+  }
+
+  const { data: activos, error: err1 } = await query;
+
+  // 2. Historial de últimas 6 jornadas
+  let histQuery = sb.from('viajes')
+    .select('id, estado, origen_nombre, destino_nombre, inicio_jornada, metadata')
+    .order('inicio_jornada', { ascending: false })
+    .limit(6);
+
+  if (opFiltro) {
+    histQuery = histQuery.ilike('metadata->>operador', `%${opFiltro}%`);
+  }
+
+  const { data: historial } = await histQuery;
+
+  const viajeActivo = activos?.[0] || null;
+
+  /* ── STATUS HERO ── */
+  const hero = document.getElementById('status-hero');
+  const dot  = hero.querySelector('.status-dot');
+  const text = document.getElementById('status-text');
+  const since = document.getElementById('status-since');
+
+  if (viajeActivo) {
+    renderEstado(viajeActivo);
+    renderViaje(viajeActivo);
+
+    // Agregar tarjeta de mapa
+    const mapCard = document.createElement('div');
+    mapCard.id = 'map-card';
+    mapCard.className = 'map-card';
+    mapCard.innerHTML = '<div class="map-header">Ruta registrada</div><div id="map"></div>';
+    document.getElementById('main-content').appendChild(mapCard);
+
+    // Buscar ruta GeoJSON asociada al viaje activo
+    const { data: rutas } = await sb.from('rutas_recolectadas')
+      .select('datos_viaje')
+      .eq('id_local', viajeActivo.id_local)
+      .limit(1);
+    renderMapa(rutas);
+
+  } else {
+    // Sin viaje activo
+    clearInterval(timerInterval);
+    dot.className  = 'status-dot offline';
+    text.className = 'status-value offline';
+    text.textContent = 'Sin actividad';
+
+    const ultimoViaje = historial?.[0];
+    if (ultimoViaje) {
+      const op = ultimoViaje.metadata?.operador || 'Operador';
+      since.textContent = `${op} · Última jornada: ${fechaCorta(ultimoViaje.inicio_jornada)}`;
+    } else {
+      since.textContent = opFiltro ? `${opFiltro} · Sin jornadas registradas` : 'Sin jornadas registradas';
+    }
+
+    document.getElementById('main-content').innerHTML = `
+      <div class="empty-state">
+        🛑 No hay una jornada activa en este momento.<br>
+        <span style="font-size:12px;margin-top:8px;display:block;">El operador está descansando.</span>
+      </div>
+    `;
+  }
+
+  // Historial (excluir el viaje activo actual si aparece)
+  const histFiltrado = (historial || []).filter(v => v.id !== viajeActivo?.id).slice(0, 5);
+  renderHistorial(histFiltrado);
+
+  document.getElementById('last-updated').textContent = new Date().toLocaleTimeString('es-MX');
+}
+
+
+</script>
+
+</div><!-- /#app-screen -->
+</body>
+</html>

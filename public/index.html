@@ -620,6 +620,101 @@ section { padding: 100px 48px; }
   max-width: 800px;
   margin: 64px auto 0;
 }
+.price-card-enterprise {
+  max-width: 800px;
+  margin: 24px auto 0;
+  background: var(--panel);
+  border: 1px solid rgba(245,158,11,.4);
+  padding: 40px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .3s, transform .3s;
+}
+.price-card-enterprise:hover { border-color: var(--amber); transform: translateY(-3px); }
+.price-card-enterprise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(245,158,11,.05) 0%, transparent 60%);
+  pointer-events: none;
+}
+.enterprise-info { flex: 1; }
+.enterprise-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 10px;
+}
+.enterprise-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  color: var(--white);
+  line-height: 1;
+  margin-bottom: 10px;
+}
+.enterprise-desc {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.enterprise-features {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin-top: 20px;
+}
+.enterprise-features li {
+  font-size: 14px;
+  color: var(--white);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.enterprise-features li::before {
+  content: '✓';
+  color: var(--amber);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.enterprise-cta { flex-shrink: 0; text-align: center; }
+.enterprise-cta-from {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.enterprise-cta-price {
+  font-family: var(--font-display);
+  font-size: 52px;
+  color: var(--amber);
+  line-height: 1;
+}
+.enterprise-cta-period {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+.enterprise-cta .btn-primary {
+  display: inline-block;
+  min-width: 200px;
+  text-align: center;
+}
+.pricing-enterprise-link {
+  color: var(--amber);
+  text-decoration: none;
+  font-weight: 700;
+}
 .price-card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -1062,6 +1157,7 @@ footer p {
     <a href="#modulos">Módulos</a>
     <a href="#cumplimiento">Cumplimiento</a>
     <a href="#precios">Precios</a>
+    <a href="registro-empresa.html">Empresas</a>
     <a class="nav-cta" href="#descarga">Descargar</a>
   </div>
 </nav>
@@ -1266,7 +1362,7 @@ footer p {
   <div class="pricing-header">
     <div class="section-label">Planes</div>
     <h2 class="section-title">Elige tu <em>plan</em></h2>
-    <p class="section-body">Sin contratos forzosos. Cancela cuando quieras. Disponible en Google Play.</p>
+    <p class="section-body">Sin contratos forzosos. Cancela cuando quieras. Disponible en Google Play. ¿Gestionas una flota? <a href="registro-empresa.html" class="pricing-enterprise-link">Regístrate como empresa →</a></p>
   </div>
   <div class="pricing-grid">
     <div class="price-card reveal">
@@ -1284,7 +1380,7 @@ footer p {
         <li>Botón SOS de emergencia</li>
         <li>Sin anuncios</li>
       </ul>
-      <a href="#descarga" class="btn-ghost">Comenzar</a>
+      <a href="registro-empresa.html" class="btn-ghost">Comenzar</a>
     </div>
     <div class="price-card featured reveal reveal-delay-1">
       <div class="price-plan">Anual</div>
@@ -1301,7 +1397,30 @@ footer p {
         <li>Exportación de base de datos</li>
         <li>Respaldo en la nube</li>
       </ul>
-      <a href="#descarga" class="btn-primary">Mejor Opción</a>
+      <a href="registro-empresa.html" class="btn-primary">Mejor Opción</a>
+    </div>
+  </div>
+
+  <!-- EMPRESA / FLOTA -->
+  <div class="price-card-enterprise reveal">
+    <div class="enterprise-info">
+      <div class="enterprise-label">Para flotas y empresas</div>
+      <div class="enterprise-title">PLAN EMPRESARIAL</div>
+      <div class="enterprise-desc">Gestiona múltiples unidades desde un solo panel. Desde 10 hasta flotas completas — precios por volumen disponibles.</div>
+      <ul class="enterprise-features">
+        <li>Panel de administración web</li>
+        <li>Hasta 100+ unidades</li>
+        <li>Reportes consolidados por flota</li>
+        <li>Soporte técnico prioritario</li>
+        <li>Factura fiscal (CFDI)</li>
+        <li>Acceso para múltiples administradores</li>
+      </ul>
+    </div>
+    <div class="enterprise-cta">
+      <div class="enterprise-cta-from">DESDE</div>
+      <div class="enterprise-cta-price">$599</div>
+      <div class="enterprise-cta-period">MXN / mes · por unidad</div>
+      <a href="registro-empresa.html" class="btn-primary">Registrar Empresa →</a>
     </div>
   </div>
 </section>
