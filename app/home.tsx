@@ -87,8 +87,8 @@ export default function Home() {
 
       const fechaGuardada = ultimaInspeccion.substring(0, 10);
       
-      if (fechaGuardada === hoyLocal || ultimaInspeccion.includes("2026-04-05")) {
-         console.log("DEBUG - Acceso concedido.");
+      if (fechaGuardada === hoyLocal) {
+        // inspección ya realizada hoy
       } else {
         router.push('/inspeccionVisual');
         return;
@@ -149,7 +149,6 @@ export default function Home() {
       const location = await Location.getCurrentPositionAsync({});
       const lat = location.coords.latitude;
       const lng = location.coords.longitude;
-      const { data: { session } } = await supabase.auth.getSession();
       await supabase.from('eventos_ruta').insert({
         tipo:        'panico',
         lat,

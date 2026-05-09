@@ -177,7 +177,12 @@ exports.crearPaymentIntent = functions.https.onRequest(async (req, res) => {
       },
     });
 
-    const paymentIntent = subscription.latest_invoice.payment_intent;
+    const invoice = subscription.latest_invoice;
+    const paymentIntent = invoice?.payment_intent;
+
+    if (!paymentIntent?.client_secret) {
+      return res.status(400).json({ error: "No se pudo obtener el client_secret. Verifica que el plan no tenga trial." });
+    }
 
     res.json({
       clientSecret: paymentIntent.client_secret,
@@ -242,7 +247,7 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 
       // Si ya existe el usuario en Auth, solo actualizamos
       if (authErr && authErr.message.includes("already been registered")) {
-        const { data: existing } = await getSb().auth.admin.listUsers();
+        const { data: existing } = await getSb().auth.admin.listUsers({ perPage: 1000 });
         const found = existing?.users?.find(u => u.email === meta.email);
         authId = found?.id || null;
       }

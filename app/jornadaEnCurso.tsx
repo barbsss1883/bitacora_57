@@ -131,7 +131,7 @@ export default function JornadaEnCurso() {
 
   const urlVerificacion = jornadaId ? `https://bitacora57.com/validar?id=${jornadaId}` : '';
   const qrUrl = jornadaId
-    ? `https://api.qrserver.com/v1/create-qrcode/?size=300x300&data=${encodeURIComponent(urlVerificacion)}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlVerificacion)}`
     : '';
 
   // ─── Timers ───────────────────────────────────────────────────────────────
