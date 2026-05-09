@@ -522,6 +522,8 @@ async function hacerLogin() {
 async function cerrarSesion() {
   clearInterval(autoRefresh);
   clearInterval(timerInterval);
+  if (realtimeSub) { sb.removeChannel(realtimeSub); realtimeSub = null; }
+  if (mapInstance)  { mapInstance.remove(); mapInstance = null; }
   await sb.auth.signOut();
   document.getElementById('app-screen').style.display  = 'none';
   document.getElementById('login-screen').style.display = 'flex';
@@ -641,61 +643,111 @@ function renderViaje(viaje) {
   }
 }
 
-/* ── RENDERIZAR MAPA ── */
-function renderMapa(rutas) {
-  const card = document.getElementById('map-card');
-  if (!card) return;
+/* ── MAPA ── */
+let liveMarker    = null;
+let realtimeSub   = null;
 
-  if (!rutas || rutas.length === 0) {
-    card.querySelector('#map').style.display = 'none';
-    const noData = document.createElement('div');
-    noData.className = 'map-no-data';
-    noData.innerHTML = '<span class="icon">📍</span>Mapa disponible al finalizar la jornada';
-    card.appendChild(noData);
-    return;
-  }
-
-  // Buscar la ruta más reciente con coordenadas
-  let coords = null;
-  for (const r of rutas) {
-    const geom = r.datos_viaje?.geometry;
-    if (geom?.coordinates?.length > 0) {
-      coords = geom.coordinates; // [[lng,lat], ...]
-      break;
-    }
-  }
-
-  if (!coords || coords.length === 0) {
-    card.querySelector('#map').style.display = 'none';
-    const noData = document.createElement('div');
-    noData.className = 'map-no-data';
-    noData.innerHTML = '<span class="icon">📍</span>Ruta no disponible aún';
-    card.appendChild(noData);
-    return;
-  }
-
-  // Leaflet espera [lat, lng]
-  const latLngs = coords.map(c => [c[1], c[0]]);
-
+function iniciarMapa(lat, lng) {
   if (mapInstance) { mapInstance.remove(); }
   mapInstance = L.map('map', { zoomControl: true, scrollWheelZoom: false });
-
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '© OpenStreetMap © CARTO',
     maxZoom: 18,
   }).addTo(mapInstance);
+  return mapInstance;
+}
 
-  const polyline = L.polyline(latLngs, { color: '#f59e0b', weight: 3, opacity: .9 }).addTo(mapInstance);
+function iconVivo() {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:18px;height:18px;border-radius:50%;background:#f59e0b;border:3px solid #fff;box-shadow:0 0 0 4px rgba(245,158,11,.35);"></div>',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+}
 
-  // Pin inicio
-  const iconStart = L.divIcon({ className: '', html: '<div style="background:#22c55e;width:12px;height:12px;border-radius:50%;border:2px solid #fff;"></div>', iconSize:[12,12] });
-  L.marker(latLngs[0], { icon: iconStart }).addTo(mapInstance).bindPopup('Inicio');
+function moverMarcadorVivo(lat, lng, velocidad) {
+  if (!mapInstance) return;
+  if (!liveMarker) {
+    liveMarker = L.marker([lat, lng], { icon: iconVivo() })
+      .addTo(mapInstance)
+      .bindPopup(`Posición actual${velocidad > 0 ? ` · ${velocidad} km/h` : ''}`);
+  } else {
+    liveMarker.setLatLng([lat, lng]);
+    liveMarker.setPopupContent(`Posición actual${velocidad > 0 ? ` · ${velocidad} km/h` : ''}`);
+  }
+  mapInstance.setView([lat, lng], Math.max(mapInstance.getZoom(), 14));
+}
 
-  // Pin fin
-  const iconEnd = L.divIcon({ className: '', html: '<div style="background:#f59e0b;width:12px;height:12px;border-radius:50%;border:2px solid #fff;"></div>', iconSize:[12,12] });
-  L.marker(latLngs[latLngs.length - 1], { icon: iconEnd }).addTo(mapInstance).bindPopup('Última posición');
+async function renderMapa(viajeActivo) {
+  const card = document.getElementById('map-card');
+  if (!card) return;
 
-  mapInstance.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+  // 1. Intentar obtener posición en tiempo real (gps_actual)
+  const { data: gpsRows } = await sb.from('gps_actual')
+    .select('lat,lng,velocidad,updated_at')
+    .eq('jornada_id', String(viajeActivo.id_local ?? ''))
+    .order('updated_at', { ascending: false })
+    .limit(1);
+
+  const gpsVivo = gpsRows?.[0] || null;
+
+  // 2. Intentar obtener ruta histórica (rutas_recolectadas)
+  const { data: rutas } = await sb.from('rutas_recolectadas')
+    .select('datos_viaje')
+    .eq('id_local', viajeActivo.id_local)
+    .limit(1);
+
+  const coords = rutas?.[0]?.datos_viaje?.geometry?.coordinates || null;
+
+  // Si no hay nada todavía
+  if (!gpsVivo && (!coords || coords.length === 0)) {
+    card.querySelector('#map').style.display = 'none';
+    const noData = document.createElement('div');
+    noData.className = 'map-no-data';
+    noData.innerHTML = '<span class="icon">📍</span>Esperando señal GPS…';
+    card.appendChild(noData);
+    return;
+  }
+
+  iniciarMapa(gpsVivo?.lat ?? coords[0][1], gpsVivo?.lng ?? coords[0][0]);
+
+  // Dibujar ruta histórica si existe
+  if (coords && coords.length > 1) {
+    const latLngs = coords.map(c => [c[1], c[0]]);
+    L.polyline(latLngs, { color: '#f59e0b', weight: 3, opacity: .5 }).addTo(mapInstance);
+    const iconStart = L.divIcon({ className: '', html: '<div style="background:#22c55e;width:10px;height:10px;border-radius:50%;border:2px solid #fff;"></div>', iconSize:[10,10] });
+    L.marker(latLngs[0], { icon: iconStart }).addTo(mapInstance).bindPopup('Inicio');
+    mapInstance.fitBounds(L.polyline(latLngs).getBounds(), { padding: [30, 30] });
+  }
+
+  // Poner marcador vivo
+  if (gpsVivo) {
+    moverMarcadorVivo(gpsVivo.lat, gpsVivo.lng, gpsVivo.velocidad || 0);
+
+    // Actualizar velocidad en el timer si existe
+    const timerNote = document.querySelector('.timer-note');
+    if (timerNote && gpsVivo.velocidad > 0) {
+      timerNote.textContent += ` · ${gpsVivo.velocidad} km/h`;
+    }
+  }
+
+  // Suscribirse a actualizaciones en tiempo real
+  if (realtimeSub) { sb.removeChannel(realtimeSub); }
+  realtimeSub = sb.channel('gps-live')
+    .on('postgres_changes', {
+      event:  '*',
+      schema: 'public',
+      table:  'gps_actual',
+      filter: `jornada_id=eq.${viajeActivo.id_local}`,
+    }, payload => {
+      const row = payload.new;
+      if (row?.lat && row?.lng) {
+        moverMarcadorVivo(row.lat, row.lng, row.velocidad || 0);
+        document.getElementById('last-updated').textContent = new Date().toLocaleTimeString('es-MX');
+      }
+    })
+    .subscribe();
 }
 
 /* ── RENDERIZAR HISTORIAL ── */
@@ -773,12 +825,7 @@ async function cargar() {
     mapCard.innerHTML = '<div class="map-header">Ruta registrada</div><div id="map"></div>';
     document.getElementById('main-content').appendChild(mapCard);
 
-    // Buscar ruta GeoJSON asociada al viaje activo
-    const { data: rutas } = await sb.from('rutas_recolectadas')
-      .select('datos_viaje')
-      .eq('id_local', viajeActivo.id_local)
-      .limit(1);
-    renderMapa(rutas);
+    renderMapa(viajeActivo);
 
   } else {
     // Sin viaje activo

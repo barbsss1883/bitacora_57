@@ -3,7 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { insertarPuntoGPS, validarTiemposSCT } from '../../db/database';
-// SyncService import removed — sync happens in foreground only
+import { supabase } from './supabaseClient';
 
 const LOCATION_TASK_NAME = 'BACKGROUND_GPS_TRACKING';
 type ResultadoRastreo = { ok: boolean; message?: string };
@@ -15,25 +15,36 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   }
   if (data) {
     const { locations } = data as { locations: Location.LocationObject[] };
-    const location = locations[0]; 
+    const location = locations[0];
 
     if (location) {
       try {
-
         const jornadaIdStr = await AsyncStorage.getItem('CURRENT_JORNADA_ID');
-        
+
         if (jornadaIdStr) {
           const jornadaId = parseInt(jornadaIdStr, 10);
-          
+
           await insertarPuntoGPS(
             jornadaId,
             location.coords.latitude,
             location.coords.longitude,
-            location.coords.speed || 0 
+            location.coords.speed || 0
           );
-          // ✅ procesarColaSync() eliminado: Firestore puede no estar inicializado
-          // en el contexto background y causaría que la tarea GPS se detuviera.
-          // La sync ocurre en foreground desde jornadaEnCurso.tsx useEffect.
+
+          // Enviar posición actual a Supabase para el dashboard familiar
+          // Envuelto en try-catch para que un fallo no detenga el GPS
+          try {
+            await supabase.from('gps_actual').upsert({
+              jornada_id:  jornadaIdStr,
+              lat:         location.coords.latitude,
+              lng:         location.coords.longitude,
+              velocidad:   Math.round((location.coords.speed || 0) * 3.6), // m/s → km/h
+              updated_at:  new Date().toISOString(),
+            }, { onConflict: 'jornada_id' });
+          } catch (_) {
+            // silencioso — no interrumpir rastreo por fallo de red
+          }
+
           console.log(`📍 Guardado: ID ${jornadaId} - [${location.coords.latitude}, ${location.coords.longitude}]`);
         } else {
           console.log("⚠️ GPS activo pero sin jornada seleccionada.");
