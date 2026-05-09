@@ -33,6 +33,7 @@
       { "source": "/aviso-privacidad",   "destination": "/aviso-privacidad.html" },
       { "source": "/eliminar-cuenta",    "destination": "/eliminar-cuenta.html" },
       { "source": "/validar",            "destination": "/validar.html" },
+      { "source": "/familia",            "destination": "/familia.html" },
       { "source": "**",                  "destination": "/index.html" }
     ]
   },

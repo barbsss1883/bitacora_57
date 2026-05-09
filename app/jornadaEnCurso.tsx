@@ -674,7 +674,10 @@ export default function JornadaEnCurso() {
           </View>
 
           <View style={styles.progressBarBgNew}>
-            <View style={[styles.progressBarFillNew, { width: '30%', backgroundColor: enPausa ? COLORS.warning : COLORS.success }]} />
+            <View style={[styles.progressBarFillNew, {
+              width: `${Math.min((tiempoManejo.split(':').reduce((a, t) => a * 60 + parseInt(t), 0) / 18000) * 100, 100)}%`,
+              backgroundColor: enPausa ? COLORS.warning : COLORS.success,
+            }]} />
           </View>
           <View style={styles.progressLabels}>
             <Text style={styles.progressLabelText}>INICIO</Text>
