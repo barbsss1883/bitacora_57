@@ -8,24 +8,18 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "prebuild": true,
-      "hook": "npx node eas-hooks/eas-build-pre-install.js"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "prebuild": true,
-      "hook": "npx node eas-hooks/eas-build-pre-install.js"
+      }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
-      },
-      "prebuild": true,
-      "hook": "npx node eas-hooks/eas-build-pre-install.js"
+      }
     }
   },
   "submit": {
