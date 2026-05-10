@@ -8,7 +8,9 @@
     "android": "expo prebuild && expo run:android",
     "build:preview": "eas build -p android --profile preview",
     "build:prod": "eas build -p android --profile production",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "eas-build-pre-install": "node ./eas-hooks/eas-build-pre-install.js",
+    "postinstall": "node ./eas-hooks/eas-build-pre-install.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

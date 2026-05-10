@@ -1,25 +1,21 @@
 // eas-hooks/eas-build-pre-install.js
 //
-// EAS corre este script con: "npx node eas-hooks/eas-build-pre-install.js"
-// ANTES de instalar dependencias npm y ANTES de que Gradle corra.
-// Escribe el MAPBOX_DOWNLOADS_TOKEN en ~/.gradle/gradle.properties
-// para que @rnmapbox/maps pueda descargar sus dependencias de Maven.
+// EAS corre este script automáticamente ANTES de instalar dependencias npm
+// y ANTES de que Gradle corra.
 
 const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
 
-async function main() {
+// ===== MAPBOX TOKEN =====
+function setupMapbox() {
   const token = process.env.MAPBOX_DOWNLOADS_TOKEN;
 
   if (!token) {
     console.error(
       '\n[mapbox-hook] ❌ MAPBOX_DOWNLOADS_TOKEN no encontrado en variables de entorno.\n' +
-      '  Verifica que el secret MAPBOX_DOWNLOAD_TOKEN existe en EAS:\n' +
-      '  $ eas secret:list\n'
+      '  Verifica que el secret existe en EAS: eas env:list\n'
     );
-    // No lanzamos error para no bloquear el build — Gradle fallará con 401
-    // y el mensaje será más claro
     return;
   }
 
@@ -37,7 +33,6 @@ async function main() {
   }
 
   if (current.includes('MAPBOX_DOWNLOADS_TOKEN')) {
-    // Reemplazar el valor existente por si cambió
     const updated = current.replace(
       /MAPBOX_DOWNLOADS_TOKEN=.*/,
       `MAPBOX_DOWNLOADS_TOKEN=${token}`
@@ -49,37 +44,74 @@ async function main() {
     console.log('[mapbox-hook] ✅ MAPBOX_DOWNLOADS_TOKEN escrito en gradle.properties');
   }
 
-  // Verificar que quedó
   const verify = fs.readFileSync(gradlePath, 'utf8');
   if (verify.includes('MAPBOX_DOWNLOADS_TOKEN')) {
     console.log(`[mapbox-hook] ✅ Verificado: ${gradlePath}`);
   } else {
     console.error('[mapbox-hook] ❌ No se pudo verificar la escritura');
   }
+}
 
-  // ===== google-services.json =====
+// ===== GOOGLE SERVICES =====
+function setupGoogleServices() {
   const googleServicesB64 = process.env.GOOGLE_SERVICES_JSON_B64;
+  const googleServicesPath = path.join(process.cwd(), 'google-services.json');
+
+  console.log('[google-services-hook] Verificando GOOGLE_SERVICES_JSON_B64...');
+
+  // Si el archivo ya existe, no hacer nada
+  if (fs.existsSync(googleServicesPath)) {
+    console.log('[google-services-hook] ✅ google-services.json ya existe, saltando');
+    return;
+  }
+
   if (!googleServicesB64) {
-    console.warn(
-      '\n[google-services-hook] ⚠️  GOOGLE_SERVICES_JSON_B64 no encontrado en variables de entorno.\n' +
-      '  Si necesitas Firebase/Google Play Services, asegúrate de agregar:\n' +
-      '  $ eas secret:create --name GOOGLE_SERVICES_JSON_B64 --value <base64-encoded-json>\n'
+    console.error(
+      '\n[google-services-hook] ❌ GOOGLE_SERVICES_JSON_B64 no encontrado en variables de entorno.\n' +
+      '  Asegúrate de que el secret se creó: eas env:list\n' +
+      '  Si necesitas actualizarlo: eas env:create --name GOOGLE_SERVICES_JSON_B64\n'
     );
-  } else {
-    try {
-      const jsonContent = Buffer.from(googleServicesB64, 'base64').toString('utf8');
-      const googleServicesPath = path.join(process.cwd(), 'google-services.json');
-      fs.writeFileSync(googleServicesPath, jsonContent);
-      console.log(`[google-services-hook] ✅ google-services.json creado en: ${googleServicesPath}`);
-      
-      // Verificar que es JSON válido
-      JSON.parse(jsonContent);
-      console.log('[google-services-hook] ✅ JSON válido');
-    } catch (err) {
-      console.error(`[google-services-hook] ❌ Error al procesar GOOGLE_SERVICES_JSON_B64: ${err.message}`);
-      throw err;
-    }
+    return;
+  }
+
+  try {
+    console.log('[google-services-hook] Decodificando base64...');
+    const jsonContent = Buffer.from(googleServicesB64, 'base64').toString('utf8');
+    
+    console.log('[google-services-hook] Validando JSON...');
+    JSON.parse(jsonContent);
+    
+    console.log('[google-services-hook] Escribiendo archivo...');
+    fs.writeFileSync(googleServicesPath, jsonContent);
+    
+    console.log(`[google-services-hook] ✅ google-services.json creado en: ${googleServicesPath}`);
+    console.log('[google-services-hook] ✅ JSON válido');
+  } catch (err) {
+    console.error(`[google-services-hook] ❌ Error: ${err.message}`);
+    throw err;
   }
 }
 
-main().catch(console.error);
+async function main() {
+  console.log('[EAS Build Hook] Iniciando setup...\n');
+  try {
+    setupMapbox();
+    setupGoogleServices();
+    console.log('\n[EAS Build Hook] ✅ Setup completado exitosamente');
+  } catch (err) {
+    console.error('\n[EAS Build Hook] ❌ Error durante setup:', err.message);
+    process.exit(1);
+  }
+}
+
+// Si se ejecuta directamente, ejecutar main
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Error:', err);
+    process.exit(1);
+  });
+}
+
+// Exportar funciones para uso en otros scripts
+module.exports = { setupMapbox, setupGoogleServices, main };
+
