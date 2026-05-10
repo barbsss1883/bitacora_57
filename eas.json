@@ -17,8 +17,10 @@
       }
     },
     "production": {
+      "autoSubmit": true,
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "autoIncrement": true
       }
     }
   },
