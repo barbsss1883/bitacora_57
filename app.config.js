@@ -4,6 +4,8 @@ const { withAndroidManifest } = require('@expo/config-plugins');
 
 const gsPath = path.resolve(__dirname, 'google-services.json');
 const MLKIT_BARCODE_ACTIVITY = 'com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity';
+const ADMOB_ANDROID_TEST_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
+const ADMOB_IOS_TEST_APP_ID = 'ca-app-pub-3940256099942544~1458002511';
 
 // Safety net: decode from env var if the pre-install hook hasn't run yet
 if (!fs.existsSync(gsPath) && process.env.GOOGLE_SERVICES_JSON_B64) {
@@ -68,6 +70,16 @@ module.exports = ({ config }) => {
           {
             ...plugin[1],
             RNMapboxMapsDownloadToken: process.env.MAPBOX_DOWNLOAD_TOKEN,
+          },
+        ];
+      }
+      if (Array.isArray(plugin) && plugin[0] === 'react-native-google-mobile-ads') {
+        return [
+          plugin[0],
+          {
+            ...plugin[1],
+            androidAppId: process.env.ADMOB_ANDROID_APP_ID || ADMOB_ANDROID_TEST_APP_ID,
+            iosAppId: process.env.ADMOB_IOS_APP_ID || ADMOB_IOS_TEST_APP_ID,
           },
         ];
       }
