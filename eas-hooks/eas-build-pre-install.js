@@ -56,6 +56,30 @@ async function main() {
   } else {
     console.error('[mapbox-hook] ❌ No se pudo verificar la escritura');
   }
+
+  // ===== google-services.json =====
+  const googleServicesB64 = process.env.GOOGLE_SERVICES_JSON_B64;
+  if (!googleServicesB64) {
+    console.warn(
+      '\n[google-services-hook] ⚠️  GOOGLE_SERVICES_JSON_B64 no encontrado en variables de entorno.\n' +
+      '  Si necesitas Firebase/Google Play Services, asegúrate de agregar:\n' +
+      '  $ eas secret:create --name GOOGLE_SERVICES_JSON_B64 --value <base64-encoded-json>\n'
+    );
+  } else {
+    try {
+      const jsonContent = Buffer.from(googleServicesB64, 'base64').toString('utf8');
+      const googleServicesPath = path.join(process.cwd(), 'google-services.json');
+      fs.writeFileSync(googleServicesPath, jsonContent);
+      console.log(`[google-services-hook] ✅ google-services.json creado en: ${googleServicesPath}`);
+      
+      // Verificar que es JSON válido
+      JSON.parse(jsonContent);
+      console.log('[google-services-hook] ✅ JSON válido');
+    } catch (err) {
+      console.error(`[google-services-hook] ❌ Error al procesar GOOGLE_SERVICES_JSON_B64: ${err.message}`);
+      throw err;
+    }
+  }
 }
 
 main().catch(console.error);
