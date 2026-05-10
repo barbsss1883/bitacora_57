@@ -4,7 +4,7 @@
     "slug": "bitacora",
     "scheme": "bitacora57",
     "version": "3.0.3",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "dark",
     "owner": "luis_g180418",
