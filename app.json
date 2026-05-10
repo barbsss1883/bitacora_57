@@ -56,6 +56,7 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
+      "@react-native-google-signin/google-signin",
       [
         "./plugins/withGoogleSignInScheme",
         {
@@ -63,6 +64,13 @@
         }
       ],
       "expo-notifications",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-9657693965267569~7971749819",
+          "iosAppId": "ca-app-pub-9657693965267569~7971749819"
+        }
+      ],
       [
         "@rnmapbox/maps",
         {
