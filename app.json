@@ -16,7 +16,6 @@
     "android": {
       "package": "com.luisg0418.bitacora57",
       "versionCode": 77,
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0f172a"
