@@ -17,7 +17,8 @@ workflows:
     scripts:
       - name: Decodificar service account
         script: |
-          echo $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS | base64 --decode > $CM_BUILD_DIR/service_account.json
+          echo $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS | tr -d ' \n\r' | base64 --decode > $CM_BUILD_DIR/service_account.json
+          cat $CM_BUILD_DIR/service_account.json
 
       - name: Instalar dependencias
         script: |
