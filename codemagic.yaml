@@ -15,10 +15,14 @@ workflows:
         - pattern: main
           include: true
     scripts:
-      - name: Decodificar service account
+      - name: Configurar Service Account
         script: |
-          echo $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS | tr -d ' \n\r' | base64 --decode > $CM_BUILD_DIR/service_account.json
-          cat $CM_BUILD_DIR/service_account.json
+          # Escribimos el contenido de la variable (JSON) directamente al archivo.
+          # Las comillas dobles son fundamentales para preservar el formato.
+          echo "$GCLOUD_SERVICE_ACCOUNT_CREDENTIALS" > $CM_BUILD_DIR/service_account.json
+          
+          # Verificación rápida de seguridad (solo tamaño del archivo)
+          ls -l $CM_BUILD_DIR/service_account.json
 
       - name: Instalar dependencias
         script: |
@@ -40,6 +44,7 @@ workflows:
 
       - name: Publicar OTA update (EAS Update)
         script: |
+          # Asegúrate de tener la variable EXPO_TOKEN en tu grupo de variables
           eas update --branch production --message "Build $BUILD_NUMBER desde Codemagic" --non-interactive
         ignore_failure: true
 
@@ -49,5 +54,6 @@ workflows:
 
     publishing:
       google_play:
+        # Aquí apuntamos al archivo que creamos en el primer script
         credentials: $CM_BUILD_DIR/service_account.json
         track: production
