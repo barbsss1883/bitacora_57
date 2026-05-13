@@ -1,7 +1,7 @@
 workflows:
   android-production:
     name: Android Production Build
-    max_build_duration: 60
+    max_build_duration: 90
     environment:
       node: 20.18.0
       groups:
@@ -19,42 +19,18 @@ workflows:
         script: |
           npm install --ignore-scripts
 
-      - name: Configurar EAS CLI
+      - name: Build con EAS
         script: |
           npm install -g eas-cli
-          eas --version
+          eas build --platform android --profile production --non-interactive --local --output $CM_BUILD_DIR/app-release.aab
 
-      - name: Configurar keystore
-        script: |
-          echo $CM_KEYSTORE | base64 --decode > $CM_BUILD_DIR/keystore.jks
-          cat >> ~/.gradle/gradle.properties << GRADLE
-          MYAPP_UPLOAD_STORE_FILE=$CM_BUILD_DIR/keystore.jks
-          MYAPP_UPLOAD_KEY_ALIAS=$CM_KEY_ALIAS
-          MYAPP_UPLOAD_STORE_PASSWORD=$CM_KEYSTORE_PASSWORD
-          MYAPP_UPLOAD_KEY_PASSWORD=$CM_KEY_PASSWORD
-          GRADLE
-
-      - name: Prebuild nativo
-        script: |
-          npx expo prebuild --platform android --clean
-
-      - name: Build AAB
-        script: |
-          cd android
-          ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file=$CM_BUILD_DIR/keystore.jks \
-            -Pandroid.injected.signing.store.password=$CM_KEYSTORE_PASSWORD \
-            -Pandroid.injected.signing.key.alias=$CM_KEY_ALIAS \
-            -Pandroid.injected.signing.key.password=$CM_KEY_PASSWORD
-
-      - name: Publicar OTA update (EAS Update)
+      - name: Publicar OTA update
         script: |
           eas update --branch production --message "Build $BUILD_NUMBER desde Codemagic" --non-interactive
         ignore_failure: true
 
     artifacts:
-      - android/app/build/outputs/bundle/release/app-release.aab
-      - android/app/build/outputs/mapping/release/mapping.txt
+      - $CM_BUILD_DIR/app-release.aab
 
     publishing:
       google_play:
