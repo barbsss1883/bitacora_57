@@ -4,10 +4,8 @@ workflows:
     max_build_duration: 60
     environment:
       node: 20.18.0
-      vars:
-        EXPO_PUBLIC_SUPABASE_URL: https://sbpyojhuihdpzxgrgmid.supabase.co
-        EXPO_PUBLIC_SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNicHlvamh1aWhkcHp4Z3JnbWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTM4MjEsImV4cCI6MjA5MjI4OTgyMX0.o_lux8lfEzkFAQMHJPa6WamZOzxvrBSHmU140FM48jQ
-        MAPBOX_DOWNLOADS_TOKEN: $MAPBOX_DOWNLOADS_TOKEN
+      groups:
+        - bitacora57
       android_signing:
         - bitacora57_keystore
     triggering:
@@ -17,6 +15,10 @@ workflows:
         - pattern: main
           include: true
     scripts:
+      - name: Decodificar service account
+        script: |
+          echo $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS | base64 --decode > $CM_BUILD_DIR/service_account.json
+
       - name: Instalar dependencias
         script: |
           npm install --ignore-scripts
@@ -46,5 +48,5 @@ workflows:
 
     publishing:
       google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        credentials: $CM_BUILD_DIR/service_account.json
         track: production
