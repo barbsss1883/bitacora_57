@@ -106,10 +106,17 @@ export default function Perfil() {
   };
 
   // ─── Foto de perfil ───────────────────────────────────────────────────────
+  // ✅ FIX GOOGLE PLAY: Photo Picker del sistema — no requiere READ_MEDIA_IMAGES
   const seleccionarFotoPerfil = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true,
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+      // Activa el Photo Picker nativo de Android 13+ (sin permiso de galería)
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
     });
     if (!result.canceled && result.assets[0].base64) {
       setFoto(`data:image/jpeg;base64,${result.assets[0].base64}`);
@@ -117,12 +124,19 @@ export default function Perfil() {
   };
 
   // ─── Documentos ───────────────────────────────────────────────────────────
+  // ✅ FIX GOOGLE PLAY: Photo Picker del sistema en ambas ramas de imagen
   const seleccionarLicencia = async () => {
     Alert.alert('Subir Licencia', 'Selecciona el formato de tu documento', [
       {
         text: 'Imagen / Cámara',
         onPress: async () => {
-          const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.5, base64: true });
+          const res = await ImagePicker.launchImageLibraryAsync({
+            quality: 0.5,
+            base64: true,
+            // Activa el Photo Picker nativo de Android 13+ (sin permiso de galería)
+            preferredAssetRepresentationMode:
+              ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+          });
           if (!res.canceled) setDocLicencia({ uri: res.assets[0].uri, name: 'licencia.jpg', type: 'image' });
         },
       },
@@ -137,8 +151,15 @@ export default function Perfil() {
     ]);
   };
 
+  // ✅ FIX GOOGLE PLAY: Photo Picker del sistema — no requiere READ_MEDIA_IMAGES
   const seleccionarIne = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.5, base64: true });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.5,
+      base64: true,
+      // Activa el Photo Picker nativo de Android 13+ (sin permiso de galería)
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+    });
     if (!result.canceled) setFotoIne(result.assets[0].uri);
   };
 
@@ -650,3 +671,4 @@ const styles = StyleSheet.create({
   pdfErrorBtnText:    { color: '#010A14', fontWeight: 'bold' },
   visorInstrucciones: { color: COLORS.subtext, textAlign: 'center', padding: 20, fontSize: 12, letterSpacing: 1, backgroundColor: 'rgba(0,0,0,0.8)' },
 });
+
