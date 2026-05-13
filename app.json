@@ -3,11 +3,20 @@
     "name": "Bitacora57",
     "slug": "bitacora",
     "scheme": "bitacora57",
-    "version": "3.0.3",
+    "version": "3.0.5",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "dark",
     "owner": "luis_g180418",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f77a8b33-7278-4b0b-a8cf-48b03041baee",
+      "enabled": true,
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    },
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
@@ -15,7 +24,7 @@
     },
     "android": {
       "package": "com.luisg0418.bitacora57",
-      "versionCode": 77,
+      "versionCode": 79,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0f172a"
@@ -28,26 +37,18 @@
         "FOREGROUND_SERVICE_LOCATION",
         "CAMERA",
         "INTERNET",
-        "POST_NOTIFICATIONS",
-        "READ_MEDIA_IMAGES",
-        "READ_MEDIA_VIDEO",
-        "READ_MEDIA_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
-        "android.permission.ACCESS_MEDIA_LOCATION",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_AUDIO"
+        "POST_NOTIFICATIONS"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.SYSTEM_ALERT_WINDOW"
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION"
       ]
     },
     "ios": {
@@ -56,6 +57,7 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
+      "expo-updates",
       "@react-native-google-signin/google-signin",
       [
         "./plugins/withGoogleSignInScheme",
@@ -83,14 +85,6 @@
           "locationAlwaysAndWhenInUsePermission": "Bitácora57 recopila datos de ubicación para registrar tu ruta y jornada laboral (NOM-087), incluso cuando la app está cerrada o no se usa.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
-        }
-      ],
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "Permite acceder a tus fotos para subir documentos.",
-          "savePhotosPermission": "Permite guardar reportes en tu galería.",
-          "isAccessMediaLocationEnabled": true
         }
       ],
       "expo-font"
