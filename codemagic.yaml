@@ -22,10 +22,12 @@ workflows:
       - name: Build con EAS
         script: |
           npm install -g eas-cli
+          export EXPO_TOKEN=$EXPO_TOKEN
           eas build --platform android --profile production --non-interactive --local --output $CM_BUILD_DIR/app-release.aab
 
       - name: Publicar OTA update
         script: |
+          export EXPO_TOKEN=$EXPO_TOKEN
           eas update --branch production --message "Build $BUILD_NUMBER desde Codemagic" --non-interactive
         ignore_failure: true
 
