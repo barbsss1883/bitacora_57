@@ -28,7 +28,7 @@ workflows:
       - name: Publicar OTA update
         script: |
           export EXPO_TOKEN=$EXPO_TOKEN
-          eas update --branch production --message "Build $BUILD_NUMBER desde Codemagic" --non-interactive
+          eas update --branch production --platform android --message "Build $BUILD_NUMBER desde Codemagic" --non-interactive
         ignore_failure: true
 
     artifacts:
