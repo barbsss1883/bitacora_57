@@ -27,7 +27,7 @@ const GRADIENTS = {
   emergencyBg: ['#A70000', '#7A0000', '#4A0000'] as const,
 };
 
-const AD_UNIT_ID = __DEV__ ? TestIds.BANNER : "ca-app-pub-9657693965267569/4678645716";
+const AD_UNIT_ID = __DEV__ ? TestIds.BANNER : "ca-app-pub-9657693965267569~8224918069";
 
 export default function Home() {
   const router = useRouter();

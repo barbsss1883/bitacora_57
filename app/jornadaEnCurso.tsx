@@ -1,30 +1,3 @@
-// ─── CAMBIOS RESPECTO AL ORIGINAL ────────────────────────────────────────────
-// 1. Eliminado: import { db_firestore, storage } from '../src/services/firebaseConfig'
-//               import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
-//               import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-//
-// 2. subirPdfFirebase() → subirPdfSupabase()
-//    Usa supabase.storage en lugar de Firebase Storage.
-//    El PDF se sube al bucket 'reportes-pdf' con path:
-//    {licencia}/{jornadaId}/Viaje_{jornadaId}.pdf
-//
-// 3. encolarSync() sigue igual (ya usaba el SyncService propio).
-//    SyncService fue actualizado por separado para apuntar a Supabase.
-//
-// 4. cargarEstado(): USER_SESSION de AsyncStorage → supabase.auth.getSession()
-//    para obtener el perfil del operador actual.
-//
-// 5. sincronizarYFinalizar(): el insert directo a 'rutas_recolectadas' en Supabase
-//    ahora incluye el operador_id del usuario autenticado en lugar de la licencia.
-//
-// 6. Se eliminó todo import de Firebase (firebaseConfig, firestore, storage).
-//
-// 7. [BUG FIX] sincronizarYFinalizar(): ultimaInspeccion era tratado como objeto
-//    cuando en realidad es el resultado de .sort() (sigue siendo un array).
-//    Corregido: ultimaInspeccion[0].detalles_json en lugar de ultimaInspeccion.detalles_json
-//    y todos los accesos de propiedad apuntan a ultimaInspeccion[0].
-// ─────────────────────────────────────────────────────────────────────────────
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, 

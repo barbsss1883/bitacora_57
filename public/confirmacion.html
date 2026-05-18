@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Suscripción Confirmada — Bitácora 57</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@300;400;600;700&family=Barlow:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<style>
+:root{
+  --asphalt:#050c14;--dark:#080f1a;--panel:#0c1928;--border:#162234;
+  --amber:#f59e0b;--amber-dim:#d97706;--amber-glow:#fbbf24;--amber-pale:rgba(245,158,11,0.07);
+  --white:#eef3f8;--muted:#5a7a94;--muted2:#3a5268;
+  --success:#22c55e;--success-dim:rgba(34,197,94,0.10);
+  --font-display:'Bebas Neue',sans-serif;--font-ui:'Barlow Condensed',sans-serif;
+  --font-body:'Barlow',sans-serif;--font-mono:'Share Tech Mono',monospace;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--asphalt);color:var(--white);font-family:var(--font-body);
+  min-height:100vh;overflow-x:hidden;cursor:none;
+  display:flex;flex-direction:column;
+}
+
+/* CURSOR */
+#cursor{position:fixed;width:10px;height:10px;background:var(--amber);border-radius:50%;pointer-events:none;z-index:99999;transform:translate(-50%,-50%);mix-blend-mode:difference;transition:width .2s,height .2s;}
+#cursor-ring{position:fixed;width:36px;height:36px;border:1px solid rgba(245,158,11,.35);border-radius:50%;pointer-events:none;z-index:99998;transform:translate(-50%,-50%);transition:width .3s,height .3s,border-color .3s;}
+body:has(a:hover) #cursor,body:has(button:hover) #cursor{width:5px;height:5px;}
+body:has(a:hover) #cursor-ring,body:has(button:hover) #cursor-ring{width:52px;height:52px;border-color:rgba(245,158,11,.6);}
+
+/* NOISE TEXTURE */
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:9998;opacity:.7;}
+
+/* NAV */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:1000;
+  display:flex;align-items:center;justify-content:center;
+  padding:20px 56px;
+  background:transparent;
+  border-bottom:1px solid transparent;
+}
+.nav-logo{font-family:var(--font-display);font-size:26px;letter-spacing:3px;color:var(--white);text-decoration:none;}
+.nav-logo span{color:var(--amber);}
+
+/* MAIN LAYOUT */
+main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 24px 60px;
+  position: relative;
+}
+main::before {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%); width: 800px; height: 800px;
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.04) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* CONFIRM BOX */
+.confirm-box {
+  background: var(--dark);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--success);
+  padding: 56px 48px;
+  width: 100%;
+  max-width: 540px;
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  opacity: 0; transform: translateY(30px);
+}
+
+.success-icon {
+  width: 80px; height: 80px;
+  background: var(--success-dim);
+  color: var(--success);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 24px;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  box-shadow: 0 0 40px rgba(34, 197, 94, 0.15);
+  font-size: 40px;
+}
+
+.badge {
+  display:inline-block;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:3px;
+  text-transform:uppercase;color:var(--success);
+  border:1px solid rgba(34, 197, 94, .3);
+  padding:5px 14px;margin-bottom:20px;
+}
+
+.title {
+  font-family:var(--font-display);
+  font-size:clamp(40px, 6vw, 56px);
+  letter-spacing:1px;line-height:.95;
+  margin-bottom: 16px;
+}
+.title em { color: var(--amber); font-style: normal; display: block;}
+
+.desc {
+  font-family:var(--font-ui);font-size:15px;
+  color:var(--muted);line-height:1.6;
+  margin-bottom: 32px;
+}
+
+/* ORDER DETAILS */
+.res-box{background:var(--asphalt);border:1px solid var(--border);padding:20px;margin-bottom:32px;text-align:left;position:relative;}
+.res-box::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--amber);}
+.rrow{display:flex;justify-content:space-between;margin-bottom:10px;}
+.rrow:last-child{margin-bottom:0;}
+.rl{font-family:var(--font-ui);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+.rv{font-family:var(--font-mono);font-size:13px;color:var(--white);}
+.rdiv{height:1px;background:var(--border);margin:12px 0;}
+
+/* NEXT STEPS */
+.next-steps {
+  text-align: left;
+  margin-bottom: 40px;
+}
+.next-steps-title {
+  font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+  letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px;
+}
+.step-item {
+  display: flex; gap: 14px; margin-bottom: 16px;
+}
+.step-item:last-child { margin-bottom: 0; }
+.step-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--amber-pale); border: 1px solid rgba(245,158,11,.3);
+  color: var(--amber); display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 11px; flex-shrink: 0;
+}
+.step-text strong {
+  font-family: var(--font-ui); font-size: 14px; color: var(--white);
+  letter-spacing: .5px; display: block; margin-bottom: 2px;
+}
+.step-text {
+  font-family: var(--font-ui); font-size: 13px; color: var(--muted); line-height: 1.4;
+}
+
+/* BUTTONS */
+.nbtn{width:100%;padding:14px;background:var(--amber);color:#050c14;font-family:var(--font-display);font-size:18px;letter-spacing:2px;border:none;cursor:pointer;transition:all .2s;text-decoration:none;display:inline-block;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));}
+.nbtn:hover{background:var(--amber-glow);transform:translateY(-1px);box-shadow:0 8px 24px rgba(245,158,11,.25);}
+.bbtn{background:none;border:none;color:var(--muted);font-family:var(--font-ui);font-size:13px;letter-spacing:1px;cursor:pointer;text-decoration:none;display:inline-block;margin-top:20px;transition:color .2s;}
+.bbtn:hover{color:var(--white);}
+
+@media(max-width: 600px){
+  .confirm-box { padding: 40px 24px; border-top-width: 2px; }
+  .rrow { flex-direction: column; gap: 4px; }
+}
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<nav>
+  <a href="index.html" class="nav-logo">BITÁCORA <span>57</span></a>
+</nav>
+
+<main>
+  <div class="confirm-box" id="confirm-box">
+    <div class="success-icon" id="s-icon">✓</div>
+    
+    <div class="badge">PAGO APROBADO</div>
+    
+    <h1 class="title">Suscripción<br><em>Activada.</em></h1>
+    <p class="desc">Tu pago ha sido procesado con éxito. Tu cuenta empresarial ya está registrada en nuestros sistemas.</p>
+
+    <div class="res-box">
+      <div class="rrow"><span class="rl">Empresa</span><span class="rv" id="c-empresa">Cargando...</span></div>
+      <div class="rrow"><span class="rl">Plan</span><span class="rv" id="c-plan" style="color:var(--amber);">—</span></div>
+      <div class="rdiv"></div>
+      <div class="rrow"><span class="rl">Transacción Stripe</span><span class="rv" id="c-tx" style="color:var(--muted2);">—</span></div>
+    </div>
+
+    <div class="next-steps">
+      <div class="next-steps-title">Siguientes pasos</div>
+      <div class="step-item">
+        <span class="step-num">1</span>
+        <div class="step-text"><strong>Revisa tu correo electrónico</strong><br>Te enviaremos tus credenciales de administrador (verifica la carpeta SPAM).</div>
+      </div>
+      <div class="step-item">
+        <span class="step-num">2</span>
+        <div class="step-text"><strong>Accede al Panel</strong><br>Inicia sesión y cambia tu contraseña temporal por una segura.</div>
+      </div>
+      <div class="step-item">
+        <span class="step-num">3</span>
+        <div class="step-text"><strong>Invita a tus operadores</strong><br>Diles que descarguen la app en Google Play e ingresen el nombre de tu empresa.</div>
+      </div>
+    </div>
+
+    <a href="demo-dashboard.html" class="nbtn">IR AL PANEL DE FLOTA →</a>
+    <br>
+    <a href="index.html" class="bbtn">← Volver al sitio web</a>
+  </div>
+</main>
+
+<script>
+/* ══ CURSOR MOUSE ══ */
+const cur = document.getElementById('cursor');
+const ring = document.getElementById('cursor-ring');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;cur.style.left=mx+'px';cur.style.top=my+'px';});
+(function animRing(){rx+=(mx-rx)*.12;ry+=(my-ry)*.12;ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(animRing);})();
+
+/* ══ ANIMACIÓN GSAP ══ */
+gsap.to('#confirm-box', { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', delay: 0.2 });
+gsap.fromTo('#s-icon', { scale: 0 }, { scale: 1, duration: 0.6, ease: 'back.out(1.5)', delay: 0.6 });
+
+/* ══ LÓGICA DE DATOS ══ */
+document.addEventListener("DOMContentLoaded", () => {
+  // Obtenemos los parámetros de la URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const planId = urlParams.get('plan') || 'basico';
+  const empresa = urlParams.get('empresa') || 'Tu Empresa';
+
+  // Mapeamos los planes idéntico a tu registro-empresa.html
+  const PLANES = {
+    basico: { nombre: 'BÁSICO', precio: '$499 MXN' },
+    pro: { nombre: 'PRO', precio: '$999 MXN' },
+    empresa: { nombre: 'EMPRESA', precio: '$1,799 MXN' },
+    flotilla: { nombre: 'FLOTILLA', precio: 'Personalizado' }
+  };
+  
+  const planObj = PLANES[planId.toLowerCase()] || PLANES.basico;
+
+  // Inyectamos los datos en el HTML
+  document.getElementById('c-empresa').textContent = empresa.toUpperCase();
+  document.getElementById('c-plan').textContent = 'PLAN ' + planObj.nombre;
+  
+  // Simulamos un ID de transacción visible al cliente (Stripe lo maneja por detrás)
+  const txFake = 'TX-B57-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+  document.getElementById('c-tx').textContent = txFake;
+});
+</script>
+
+</body>
+</html>
