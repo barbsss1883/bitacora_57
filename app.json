@@ -38,6 +38,7 @@
         "CAMERA",
         "INTERNET",
         "POST_NOTIFICATIONS"
+        "RECEIVE_BOOT_COMPLETED"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
