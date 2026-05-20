@@ -37,7 +37,7 @@
         "FOREGROUND_SERVICE_LOCATION",
         "CAMERA",
         "INTERNET",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED"
       ],
       "blockedPermissions": [
